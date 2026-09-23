@@ -1,0 +1,13 @@
+<!-- @dsCard group="Controls" height=96 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Input — preview</title>
+<style>body{margin:0;padding:24px;background:var(--paper);color:var(--ink);font-family:var(--font-sans)} .row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}</style></head>
+<body>
+<div id="root"></div>
+<script>
+var R = window.Ruled, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div',{style:{maxWidth:360}},h(R.Input,{placeholder:'Add a task…','aria-label':'New task'})));
+</script>
+</body>
+</html>

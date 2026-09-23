@@ -1,0 +1,14 @@
+<!-- @dsCard group="Controls" height=88 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Checkbox — preview</title>
+<style>body{margin:0;padding:24px;background:var(--paper);color:var(--ink);font-family:var(--font-sans)} .row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}</style></head>
+<body>
+<div id="root"></div>
+<script>
+var R = window.Ruled, h = React.createElement;
+function Demo(){var a=React.useState(true),b=React.useState(false);return h('div',{className:'row',style:{gap:32}},h(R.Checkbox,{checked:a[0],onChange:a[1],label:'Checked'}),h(R.Checkbox,{checked:b[0],onChange:b[1],label:'Click me'}),h(R.Checkbox,{disabled:true,label:'Disabled'}));}
+ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ruled — demo</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components/bundle.css">
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="components/bundle.js"></script>
+<style>
+  body { margin: 0; padding: var(--space-16) var(--space-8); background: var(--paper); color: var(--ink); font-family: var(--font-sans); }
+  .wrap { display: flex; gap: var(--space-12); flex-wrap: wrap; align-items: flex-start; }
+  .col { flex: 1 1 400px; max-width: 480px; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--space-8); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var R = window.Ruled, h = React.createElement;
+function App() {
+  var s = React.useState([{t:'Gym session with Ash',d:true},{t:'Put together portfolio',d:false,m:'14:00'},{t:'Buy new suit',d:false},{t:'Buy new strings — heavy gauge',d:true}]), l = s[0], set = s[1];
+  var th = React.useState('light'); document.documentElement.dataset.theme = th[0];
+  return h('div', null,
+    h('div', { className: 'top' }, h('h1', { className: 'hand-display', style: { margin: 0 } }, 'Wednesday, 23'),
+      h(R.Button, { variant: 'ghost', icon: 'settings', 'aria-label': 'Toggle theme', onClick: function(){ th[1](th[0]==='light'?'dark':'light'); } })),
+    h('div', { className: 'wrap' },
+      h('div', { className: 'col' }, h(R.Paper, { stacked: true },
+        l.map(function (x, i) { return h(R.Task, { key: i, done: x.d, meta: x.m,
+          onToggle: function (v) { var n = l.slice(); n[i] = Object.assign({}, x, { d: v }); set(n); },
+          onDelete: function () { set(l.filter(function (_, j) { return j !== i; })); } }, x.t); }),
+        h(R.Input, { placeholder: 'Add a task…', 'aria-label': 'New task', onKeyDown: function (e) {
+          if (e.key === 'Enter' && e.target.value) { set(l.concat([{ t: e.target.value, d: false }])); e.target.value = ''; } } }))),
+      h('div', { className: 'col' }, h(R.Paper, { ruled: false, margin: false },
+        h(R.Schedule, { start: 8, end: 16, now: '11:20', events: [
+          { start: '8:30', end: '9:30', title: 'Gym with Ash', tone: 'sage' },
+          { start: '10:00', end: '10:30', title: 'Stand-up' },
+          { start: '12:00', end: '13:30', title: 'Lunch with Mia', tone: 'peach' },
+          { start: '14:00', end: '15:00', title: 'Portfolio — first pass' }] })))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
