@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
+    <path d="M14 61.2h37M16.5 63.4h32" stroke="#cfc7b8" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="10" y="5" width="45" height="54" fill="#fffdf8" stroke="#cfc7b8" stroke-width="1.2"/>
+    <path d="M10 20.5h45M10 31.5h45M10 42.5h45M10 53.5h45" stroke="#e2dbcf" stroke-width="1.2"/>
+    <path d="M19.5 5v54" stroke="#e0a591" stroke-width="1.2"/>
+    <polygon points="23,12 50,10.8 49.6,18.6 23.4,19.6" fill="#f7e9a8"/>
+    <path d="M24.3 23.8c1.7-.2 3.6.1 5.4-.1.2 1.9-.1 3.8.1 5.7-1.9.2-3.8-.1-5.6.1-.2-1.9.1-3.8.1-5.7z" stroke="#8f887d" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M25.1 26.4c.6.5 1.1 1.1 1.5 1.8 1-1.8 2.2-3.2 3.9-4.6" stroke="#2f2b26" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M33.5 27.3c3-.6 6 .4 9-.2 2.3-.4 4.6.2 6.8-.1" stroke="#5f584e" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24.5 38.2c3.2-.5 6.1.3 9.2-.2 2-.3 4 .2 5.8 0" stroke="#5f584e" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

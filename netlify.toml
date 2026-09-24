@@ -1,0 +1,3 @@
+# QPlan is a static site: no build step, Netlify serves this folder as is.
+[build]
+  publish = "."

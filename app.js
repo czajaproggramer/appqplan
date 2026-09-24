@@ -10,6 +10,9 @@ const PRIORITY_TODOS = 3;
 const DOUBLE_PRESS_MS = 400;       // second hour key within this time = +12h
 const DELETE_CONFIRM_MS = 800;     // second Delete within this time removes the event
 const EVENT_TONES = ['peach', 'sage', 'rose', 'sky'];   // see --event-* in styles.css
+const FIRST_VISIBLE_HOUR = 6;      // the schedule opens scrolled to this hour
+const DAY_STORAGE_PREFIX = 'qplan:day:';          // + YYYY-MM-DD, only non-empty days
+const SETTINGS_STORAGE_KEY = 'qplan:settings';
 
 // Keys that jump to an hour. Press twice for the same hour +12.
 const HOUR_KEYS = { Minus: 10, Equal: 11, NumpadSubtract: 10 };
@@ -21,12 +24,24 @@ for (let d = 0; d <= 9; d++) {
 /* ==========================================================================
    State
    ========================================================================== */
+// Data saved before the app was renamed to QPlan moves to the new keys.
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith('quickplanner:')) continue;
+    localStorage.setItem(key.replace('quickplanner:', 'qplan:'), localStorage.getItem(key));
+    localStorage.removeItem(key);
+  }
+} catch { /* storage blocked */ }
+
 const state = {
-  todos: Array.from({ length: DEFAULT_TODOS }, () => ({ text: '', done: false })),
+  date: null,        // the day shown, local midnight
+  todos: [],
   events: [],        // { id, start, end, name, tone } — start/end in quarters, end exclusive
   cursor: 0,         // quarter index, 0..95
   editingId: null,   // id of the event whose name is being typed
 };
+
+const settings = { timeFormat: '12h', ...storageGet(SETTINGS_STORAGE_KEY) };   // '12h' | '24h'
 
 let nextEventId = 1;
 let lastHourPress = null;   // { code, time, pm }
@@ -38,17 +53,33 @@ let lastPointerType = 'mouse';
    ========================================================================== */
 const $ = (sel) => document.querySelector(sel);
 
-function formatQuarter(q) {
-  const h = Math.floor(q / 4) % 24;
-  const m = (q % 4) * 15;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
+const pad2 = (n) => String(n).padStart(2, '0');
 
-const formatRange = (start, end) => `${formatQuarter(start)} – ${formatQuarter(end)}`;
+// 24h: "09:30". am/pm: "9:30am", "9am".
+function formatClock(h, m, format = settings.timeFormat) {
+  if (format === '24h') return `${pad2(h)}:${pad2(m)}`;
+  const suffix = h < 12 ? 'am' : 'pm';
+  const h12 = h % 12 || 12;
+  return m ? `${h12}:${pad2(m)}${suffix}` : `${h12}${suffix}`;
+}
+const formatQuarter = (q, format) => formatClock(Math.floor(q / 4) % 24, (q % 4) * 15, format);
+const formatRange = (start, end, format) => `${formatQuarter(start, format)} – ${formatQuarter(end, format)}`;
+
+function storageGet(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+function storageSet(key, value) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* storage full or blocked — the planner still works for this session */ }
+}
 
 const ICONS = {
   plus: 'M10 4.2c.1 3.9-.1 7.8.1 11.6M4.3 10.1c3.8-.2 7.6.1 11.4-.1',
   minus: 'M4.3 10.1c3.8-.2 7.6.1 11.4-.1',
+  left: 'M12.3 4.6c-2.2 1.9-4.1 3.6-6 5.5 1.9 1.8 3.9 3.5 5.9 5.3',
+  right: 'M7.7 4.6c2.2 1.9 4.1 3.6 6 5.5-1.9 1.8-3.9 3.5-5.9 5.3',
   trash: 'M4.5 6.1c3.7-.2 7.3.1 11-.1M8.2 5.9c0-1.1.1-1.7.2-2.2 1.1-.1 2.2 0 3.3-.1.1.6.1 1.3.1 2.2M5.9 6.4c.3 3.2.4 6.4.8 9.6 2.3.2 4.5 0 6.7.1.3-3.2.5-6.4.7-9.6',
 };
 const icon = (name, size = 16) =>
@@ -104,12 +135,16 @@ function buildRows() {
     if (q % 4 === 0) {
       const label = document.createElement('span');
       label.className = 'row-label sans-time';
-      label.textContent = formatQuarter(q);
+      label.dataset.q = q;
       row.append(label);
     }
     fragment.append(row);
   }
   rowsEl.prepend(fragment);
+}
+
+function renderLabels() {
+  for (const label of rowsEl.querySelectorAll('.row-label')) label.textContent = formatQuarter(Number(label.dataset.q));
 }
 
 const topAt = (q) => `calc(var(--row-height) * ${q})`;
@@ -133,6 +168,7 @@ function createEventEl(id) {
   input.addEventListener('input', () => {
     const ev = getEvent(id);
     if (ev) ev.name = input.value;
+    saveDay();
   });
   input.addEventListener('keydown', (e) => {
     e.stopPropagation();
@@ -206,6 +242,8 @@ function render() {
   // While editing, the event's own outline shows the range; a cursor on top would double the border.
   cursorEl.classList.toggle('is-hidden', state.editingId !== null);
   renderEvents();
+  $('#export').disabled = !state.events.some((e) => e.name.trim());
+  saveDay();
 }
 
 function scrollToCursor(block = 'nearest') {
@@ -215,9 +253,9 @@ function scrollToCursor(block = 'nearest') {
 function renderNowLine() {
   const now = new Date();
   const minutes = now.getHours() * 60 + now.getMinutes();
+  nowEl.hidden = !isViewingToday();
   nowEl.style.top = topAt(minutes / 15);
-  nowEl.firstElementChild.textContent =
-    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  nowEl.firstElementChild.textContent = formatClock(now.getHours(), now.getMinutes());
 }
 
 /* ==========================================================================
@@ -427,6 +465,7 @@ function createTodoEl(todo, index) {
   check.addEventListener('change', () => {
     todo.done = check.checked;
     syncDone();
+    saveDay();
   });
   syncDone();
 
@@ -434,7 +473,10 @@ function createTodoEl(todo, index) {
   text.type = 'text';
   text.className = 'task-text';
   text.value = todo.text;
-  text.addEventListener('input', () => { todo.text = text.value; });
+  text.addEventListener('input', () => {
+    todo.text = text.value;
+    saveDay();
+  });
   text.addEventListener('keydown', (e) => onTodoKey(e, index, check));
 
   li.append(label, text);
@@ -448,6 +490,7 @@ function renderTodos(focusIndex) {
     (i < PRIORITY_TODOS ? todoPriorityEl : todoRestEl).append(createTodoEl(todo, i));
   });
   if (focusIndex !== undefined) focusTodo(focusIndex);
+  saveDay();
 }
 
 function focusTodo(index) {
@@ -487,22 +530,86 @@ function onTodoKey(e, index, check) {
 }
 
 /* ==========================================================================
+   Days — navigation and browser storage (only days with something in them are kept)
+   ========================================================================== */
+const dateFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+});
+const dayKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+const dayStorageKey = (date) => DAY_STORAGE_PREFIX + dayKey(date);
+const addDays = (date, n) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+const isViewingToday = () => state.date !== null && dayKey(state.date) === dayKey(new Date());
+const hasPlans = (date) => storageGet(dayStorageKey(date)) !== null;
+
+function saveDay() {
+  if (!state.date) return;
+  const events = state.events
+    .filter((e) => e.name.trim())
+    .map(({ id, start, end, name, tone }) => ({ id, start, end, name: name.trim(), tone }));
+  const todos = state.todos.map(({ text, done }) => ({ text, done }));
+  const isEmpty = events.length === 0 && todos.every((t) => !t.text.trim());
+  storageSet(dayStorageKey(state.date), isEmpty ? null : { todos, events });
+}
+
+function showDay(date) {
+  commitEdit(false);
+  clearPendingDelete();
+
+  state.date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const saved = storageGet(dayStorageKey(state.date));
+  state.todos = (saved?.todos || []).map((t) => ({ text: t.text || '', done: !!t.done }));
+  while (state.todos.length < DEFAULT_TODOS) state.todos.push({ text: '', done: false });
+  state.events = (saved?.events || []).map((e) => ({ ...e }));
+  nextEventId = Math.max(0, ...state.events.map((e) => e.id)) + 1;
+  for (const el of eventEls.values()) el.remove();
+  eventEls.clear();
+
+  $('#date').textContent = dateFormat.format(state.date);
+  renderTodos();
+  const now = new Date();
+  state.cursor = isViewingToday()
+    ? Math.floor((now.getHours() * 60 + now.getMinutes()) / 15)
+    : FIRST_VISIBLE_HOUR * 4;
+  render();
+  renderNowLine();
+  scrollToFirstHour();
+}
+
+// Earlier hours are a scroll up.
+function scrollToFirstHour() {
+  const firstRow = rowsEl.children[FIRST_VISIBLE_HOUR * 4];
+  scheduleEl.scrollTop += firstRow.getBoundingClientRect().top - scheduleEl.getBoundingClientRect().top - 12;
+}
+
+$('#prev-day').addEventListener('click', () => showDay(addDays(state.date, -1)));
+$('#next-day').addEventListener('click', () => showDay(addDays(state.date, 1)));
+
+/* ==========================================================================
+   Time format — am/pm (default) or 24h, remembered in the browser
+   ========================================================================== */
+function applyTimeFormat() {
+  for (const button of document.querySelectorAll('[data-format]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.format === settings.timeFormat));
+  }
+  renderLabels();
+  renderEvents();
+  renderNowLine();
+}
+
+for (const button of document.querySelectorAll('[data-format]')) {
+  button.addEventListener('click', () => {
+    settings.timeFormat = button.dataset.format;
+    storageSet(SETTINGS_STORAGE_KEY, settings);
+    applyTimeFormat();
+  });
+}
+
+/* ==========================================================================
    Init
    ========================================================================== */
-$('#date').textContent = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-}).format(new Date());
+for (const el of document.querySelectorAll('[data-icon]')) el.innerHTML = icon(el.dataset.icon, 20);
 
 buildRows();
-renderTodos();
-renderNowLine();
+applyTimeFormat();
+showDay(new Date());
 setInterval(renderNowLine, 30 * 1000);
-
-const now = new Date();
-state.cursor = Math.floor((now.getHours() * 60 + now.getMinutes()) / 15);
-render();
-
-// The schedule opens with 06:00 as the first visible hour (earlier hours are a scroll up).
-const FIRST_VISIBLE_HOUR = 6;
-const firstRow = rowsEl.children[FIRST_VISIBLE_HOUR * 4];
-scheduleEl.scrollTop += firstRow.getBoundingClientRect().top - scheduleEl.getBoundingClientRect().top - 12;

@@ -1,9 +1,10 @@
 'use strict';
 
 /* ==========================================================================
-   Print — exports the day as a portrait A4 SVG (units are millimetres),
-   styled with the Ruled design system.
-   Uses state, formatQuarter, formatRange, QUARTERS, PRIORITY_TODOS,
+   Print — exports the day as a portrait A4 PNG at 300 DPI, styled with the
+   Ruled design system. The page is drawn as SVG (units are millimetres),
+   then rasterised, so it stays sharp.
+   Always prints times in 24h. Uses state, dayKey, formatQuarter, formatRange, QUARTERS, PRIORITY_TODOS,
    CHECK_BOX and CHECK_TICK from app.js.
    ========================================================================== */
 const PAGE = {
@@ -12,7 +13,6 @@ const PAGE = {
   margin: 14,
   dateSize: 10,             // hand-display
   titleSize: 6.5,           // hand-title
-  labelSize: 2.8,           // sans-label
   gap: 8,                   // between the to-do band and the schedule
 
   marginLine: 9,            // the red margin line, from the page margin
@@ -27,14 +27,16 @@ const PAGE = {
   labelWidth: 11,           // schedule time labels
   timeSize: 2.5,            // sans-time
   eventTextSize: 4,         // hand-note, max; shrinks if rows get too short
+  dpi: 300,                 // PNG resolution: A4 at 300 DPI is 2480 × 3508 px
 };
 
-// Fonts are embedded so the SVG looks the same on any machine.
+// Fonts are embedded in the SVG so the page renders in Patrick Hand and Karla.
 const FONT_FILES = [
   { family: 'Patrick Hand', weight: 400, url: 'ruled-design-system/fonts/patrick-hand-latin-400-normal.woff2' },
   { family: 'Karla', weight: 500, url: 'ruled-design-system/fonts/karla-latin-500-normal.woff2' },
 ];
 let embeddedFontCss = '';
+let fontsReady = Promise.resolve();
 
 function loadEmbeddedFonts() {
   const toDataUrl = (blob) => new Promise((resolve) => {
@@ -42,7 +44,7 @@ function loadEmbeddedFonts() {
     reader.onload = () => resolve(reader.result);
     reader.readAsDataURL(blob);
   });
-  Promise.all(FONT_FILES.map(async (font) => {
+  fontsReady = Promise.all(FONT_FILES.map(async (font) => {
     const blob = await (await fetch(font.url)).blob();
     const url = await toDataUrl(blob);
     return `@font-face{font-family:"${font.family}";font-weight:${font.weight};src:url(${url}) format("woff2");}`;
@@ -122,9 +124,6 @@ function buildDaySvg() {
 
   // To-do — ruled lines, a margin line, top priorities numbered in the margin
   sheetTitle('To do');
-  text(left + P.marginLine + 2, y + P.labelSize, 'Top priority',
-    `${sans} font-size="${P.labelSize}" letter-spacing="0.06" fill="${t.inkMuted}"`);
-  y += P.labelSize + 1;
 
   const priority = state.todos.slice(0, PRIORITY_TODOS);
   const rest = state.todos.slice(PRIORITY_TODOS);
@@ -184,7 +183,7 @@ function buildDaySvg() {
       const ly = yAt(i);
       if (i % 4 === 0 || i === fromQ || i === toQ) {
         line(lane - 1, ly, right, ly, t.rule, 0.35);
-        text(x, ly, formatQuarter(i),
+        text(x, ly, formatQuarter(i, '24h'),
           `${sans} font-size="${P.timeSize}" letter-spacing="0.1" dominant-baseline="central" fill="${t.inkMuted}"`);
       } else if (i % 2 === 0) {
         line(lane, ly, right, ly, t.rule, 0.3, 'stroke-dasharray="1.2 1"');
@@ -205,7 +204,7 @@ function buildDaySvg() {
       const eh = (e - s) * slotH - 0.7;
       const pad = 2.5;
       const nameSize = Math.min(P.eventTextSize, slotH * 0.62);
-      const time = formatRange(ev.start, ev.end);
+      const time = formatRange(ev.start, ev.end, '24h');
       const timeW = textWidth(time, P.timeSize, t.sans, 500) + 0.8;
       out.push(`<rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" fill="${eventColor(ev.tone)}"/>`);
 
@@ -240,28 +239,73 @@ function buildDaySvg() {
   ].join('\n');
 }
 
-function localIsoDate(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+// Downloads the SVG and opens it in a new tab.
+// PNG from the browser has no resolution info; add a pHYs chunk so apps size it as A4.
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let k = 0; k < 8; k++) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
-// Downloads the SVG and opens it in a new tab.
-function printDay() {
-  const blob = new Blob([buildDaySvg()], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
+function withDpi(png, dpi) {
+  const pixelsPerMetre = Math.round(dpi / 0.0254);
+  const chunk = new Uint8Array(21);          // length, "pHYs", x, y, unit, CRC
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, 9);
+  chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+  view.setUint32(8, pixelsPerMetre);
+  view.setUint32(12, pixelsPerMetre);
+  chunk[16] = 1;                             // unit: metre
+  view.setUint32(17, crc32(chunk.subarray(4, 17)));
+  const afterHeader = 8 + 25;                // PNG signature + IHDR chunk
+  return new Blob([png.subarray(0, afterHeader), chunk, png.subarray(afterHeader)], { type: 'image/png' });
+}
 
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `day-plan-${localIsoDate(new Date())}.svg`;
-  link.click();
-  window.open(url, '_blank');
+async function renderPng() {
+  await fontsReady;
+  const svgUrl = URL.createObjectURL(new Blob([buildDaySvg()], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    img.src = svgUrl;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round((PAGE.width / 25.4) * PAGE.dpi);
+    canvas.height = Math.round((PAGE.height / 25.4) * PAGE.dpi);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG export failed'))), 'image/png');
+    });
+    return withDpi(new Uint8Array(await png.arrayBuffer()), PAGE.dpi);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
 
-  setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
+// Downloads the PNG and opens it in a new tab.
+async function printDay() {
+  // Open the tab now, while the click still counts as a user action (otherwise it's blocked).
+  const tab = window.open('', '_blank');
+  const fileName = `qplan-${dayKey(state.date)}.png`;
+  try {
+    const url = URL.createObjectURL(await renderPng());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    if (tab) tab.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
+  } catch (error) {
+    tab?.close();
+    console.error(error);
+  }
 }
 
 document.getElementById('print').addEventListener('click', printDay);
 
-// Cmd/Ctrl+P exports the SVG instead of the browser's print dialog.
+// Cmd/Ctrl+P exports the PNG instead of the browser's print dialog.
 // Capture phase, so it also works while typing in an event or a to-do.
 window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'p') {
