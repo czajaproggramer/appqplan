@@ -9,7 +9,15 @@
    applyTimeFormat, DAY_STORAGE_PREFIX and SETTINGS_STORAGE_KEY from app.js.
    Setup and local emulators: firebase/README.md.
    ========================================================================== */
-const FIREBASE_CONFIG = null;   // the web config from firebase/README.md step 6; null hides "Log in"
+// The web config from firebase/README.md step 6 (public by design); null hides "Log in".
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyClyVEA3QYEvDHVBIvRYwKd5LpvR1zWuoU',
+  authDomain: 'qplan-5c4d7.firebaseapp.com',
+  projectId: 'qplan-5c4d7',
+  storageBucket: 'qplan-5c4d7.firebasestorage.app',
+  messagingSenderId: '767476665721',
+  appId: '1:767476665721:web:cf845777dfb2a3f71c33a8',
+};
 const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const SYNC_STORAGE_KEY = 'qplan:sync';
 const PUSH_DELAY_MS = 1500;         // waits for a pause in typing before writing
