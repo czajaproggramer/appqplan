@@ -43,6 +43,12 @@ const state = {
 
 const settings = { timeFormat: '12h', ...storageGet(SETTINGS_STORAGE_KEY) };   // '12h' | '24h'
 
+// Told about every saved change. sync.js replaces these to copy changes to the cloud.
+const syncHooks = {
+  dayChanged(key) {},       // key: YYYY-MM-DD
+  settingsChanged() {},
+};
+
 let nextEventId = 1;
 let lastHourPress = null;   // { code, time, pm }
 let pendingDelete = null;   // { id, timer }
@@ -548,14 +554,15 @@ function saveDay() {
     .map(({ id, start, end, name, tone }) => ({ id, start, end, name: name.trim(), tone }));
   const todos = state.todos.map(({ text, done }) => ({ text, done }));
   const isEmpty = events.length === 0 && todos.every((t) => !t.text.trim());
-  storageSet(dayStorageKey(state.date), isEmpty ? null : { todos, events });
+  const value = isEmpty ? null : { todos, events };
+  const key = dayStorageKey(state.date);
+  if (JSON.stringify(storageGet(key)) === JSON.stringify(value)) return;   // e.g. just opening a day
+  storageSet(key, value);
+  syncHooks.dayChanged(dayKey(state.date));
 }
 
-function showDay(date) {
-  commitEdit(false);
-  clearPendingDelete();
-
-  state.date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+// Reads the shown day from storage into state and redraws the to-do list.
+function loadDay() {
   const saved = storageGet(dayStorageKey(state.date));
   state.todos = (saved?.todos || []).map((t) => ({ text: t.text || '', done: !!t.done }));
   while (state.todos.length < DEFAULT_TODOS) state.todos.push({ text: '', done: false });
@@ -563,9 +570,16 @@ function showDay(date) {
   nextEventId = Math.max(0, ...state.events.map((e) => e.id)) + 1;
   for (const el of eventEls.values()) el.remove();
   eventEls.clear();
-
-  $('#date').textContent = dateFormat.format(state.date);
   renderTodos();
+}
+
+function showDay(date) {
+  commitEdit(false);
+  clearPendingDelete();
+
+  state.date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  $('#date').textContent = dateFormat.format(state.date);
+  loadDay();
   const now = new Date();
   state.cursor = isViewingToday()
     ? Math.floor((now.getHours() * 60 + now.getMinutes()) / 15)
@@ -573,6 +587,17 @@ function showDay(date) {
   render();
   renderNowLine();
   scrollToFirstHour();
+}
+
+// Shows a change to the open day made on another device (sync.js). Keeps the cursor,
+// the scroll position and the focused to-do line. Not called while an event is being edited.
+function reloadDay() {
+  const todoInputs = [...document.querySelectorAll('.task-text')];
+  const focusedTodo = todoInputs.indexOf(document.activeElement);
+  clearPendingDelete();
+  loadDay();
+  render();
+  if (focusedTodo !== -1) focusTodo(Math.min(focusedTodo, state.todos.length - 1));
 }
 
 // Earlier hours are a scroll up.
@@ -601,6 +626,7 @@ for (const button of document.querySelectorAll('[data-format]')) {
     settings.timeFormat = button.dataset.format;
     storageSet(SETTINGS_STORAGE_KEY, settings);
     applyTimeFormat();
+    syncHooks.settingsChanged();
   });
 }
 

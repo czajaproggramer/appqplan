@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// QPlan sync: each signed-in user reads and writes only their own documents.
+//   users/{uid}             { settings: { timeFormat }, settingsUpdatedAt }
+//   users/{uid}/days/{date} { todos, events, updatedAt } or { deleted: true, updatedAt }
+// Paste this into Firebase console → Firestore Database → Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      match /days/{date} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.updatedAt is number;
+      }
+    }
+  }
+}

@@ -31,6 +31,18 @@
     <img class="brand" src="logos/1-q-tick.svg" alt="QPlan" width="110" height="40">
 
     <div class="header-actions">
+      <!-- Shown by sync.js only when Firebase is configured -->
+      <div class="account">
+        <button id="login" class="btn btn--quiet" type="button" title="Log in with Google to sync your days across devices" hidden>Log in</button>
+        <button id="sync-status" class="sync-status sans-label" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" hidden>
+          <span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span>
+        </button>
+        <div id="account-menu" class="account-menu" hidden>
+          <p id="account-email" class="account-email sans-label"></p>
+          <button id="logout" class="menu-item sans-body" type="button">Log out</button>
+          <button id="delete-account" class="menu-item menu-item--danger sans-body" type="button">Delete account…</button>
+        </div>
+      </div>
       <button id="export" class="btn btn--quiet" type="button" title="Download this day's events as a calendar file (.ics)">
         Export events
       </button>
@@ -89,9 +101,47 @@
     </form>
   </footer>
 
+  <!-- First log-in when this device and the account both have saved days -->
+  <dialog id="merge-dialog" class="dialog" aria-labelledby="merge-title">
+    <form method="dialog">
+      <h2 id="merge-title" class="hand-title">Combine your plans?</h2>
+      <p class="sans-body">This device has <strong id="merge-local"></strong>. Your account has <strong id="merge-cloud"></strong>.</p>
+      <div class="dialog-choices">
+        <button class="choice" value="combine" autofocus>
+          <span class="choice-title hand-task">Combine both</span>
+          <span class="choice-text sans-body">Keep the days from both. If a date has plans in both, the one edited last wins.</span>
+        </button>
+        <button class="choice" value="device">
+          <span class="choice-title hand-task">Keep only this device's days</span>
+          <span class="choice-text sans-body">Your account's days are replaced with this device's.</span>
+        </button>
+        <button class="choice" value="cloud">
+          <span class="choice-title hand-task">Keep only your account's days</span>
+          <span class="choice-text sans-body">This device's days are replaced with your account's.</span>
+        </button>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn--ghost" value="cancel">Cancel and log out</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" class="dialog" aria-labelledby="delete-title">
+    <form method="dialog">
+      <h2 id="delete-title" class="hand-title">Delete your account?</h2>
+      <p class="sans-body">This permanently deletes your QPlan account and every day synced to it. It can't be undone.</p>
+      <p class="sans-body">The days saved on this device stay here. Google will ask you to confirm it's you.</p>
+      <div class="dialog-actions">
+        <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
+        <button class="btn btn--danger" value="delete">Delete account</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
   <script src="picker.js"></script>
   <script src="print.js"></script>
   <script src="export.js"></script>
+  <script src="sync.js"></script>
 </body>
 </html>
