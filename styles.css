@@ -95,7 +95,7 @@ kbd {
 
 /* Account: the avatar opens a menu with everything about the account (sync.js) */
 .account { position: relative; display: flex; }
-#account-button { color: var(--ink); }
+#account-button { width: 40px; height: 40px; color: var(--ink); }   /* as tall as Export and Print */
 #account-button[aria-expanded="true"] { background: var(--paper-sunk); }
 .account-info {
   margin-bottom: var(--space-2);
@@ -714,6 +714,7 @@ kbd {
   .day-nav { grid-area: nav; }
   .header-actions { grid-area: actions; justify-self: end; gap: var(--space-1); }
   .header-actions .menu-toggle { display: inline-flex; }
+  #account-button { width: 36px; height: 36px; }   /* matches the menu button */
 
   /* The header buttons and account items, in a drop-down under the menu button */
   .header-menu {
