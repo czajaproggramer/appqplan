@@ -40,7 +40,7 @@ https://console.cloud.google.com → project picker at the top → **qplan-5c4d7
 Left menu **Google Auth Platform** (older consoles: **APIs & Services → OAuth consent screen**).
 1. **Branding:** app name `QPlan`, user support email = yours, developer contact = yours. Application home page `https://q-plan.netlify.app`. Authorized domains: add `q-plan.netlify.app`. **Don't upload a logo**: a logo makes Google review the branding before the app can go live.
 2. **Audience:** user type **External**, then **Publish app** so it's **In production** (in "Testing", Google expires everyone's access after 7 days).
-3. **Data Access → Add or remove scopes** → filter for `calendar.app.created` → tick **…/auth/calendar.app.created** ("Make secondary Google calendars, and see, create, change, and delete events on them") → **Update** → **Save**. Note whether it's listed under **Your sensitive scopes** or **Your non-sensitive scopes**, and tell me: it decides whether users see the "unverified app" warning.
+3. **Data Access → Add or remove scopes** → filter for `calendar.app.created` → tick **…/auth/calendar.app.created** ("Make secondary Google calendars, and see, create, change, and delete events on them") → **Update** → **Save**. It's listed under **Your non-sensitive scopes**.
 
 ### 3. A web client for the calendar connection
 **Google Auth Platform → Clients → Create client** → type **Web application** → name `QPlan Calendar`.
@@ -69,7 +69,6 @@ Then **Deploys → Trigger deploy → Deploy site** so the functions pick them u
 
 ### 7. Send me
 - The **Client ID** (it's public; it goes into `calendar.js`). Never the secret.
-- Whether `calendar.app.created` was sensitive or non-sensitive.
 
-### Later: Google verification (only if the scope is sensitive)
-Until Google verifies the app, people see an "unverified app" warning when connecting, and the number of users who can connect is capped. Verification needs: a privacy policy on the app's domain that covers Google data (board item B-009), the final domain verified in Google Search Console (D-004), and a short demo video of connecting.
+### Google verification: not needed
+`calendar.app.created` is a **non-sensitive** scope (confirmed in the console, Oct 2026), and so are `openid` and `email`. So people connecting see no "unverified app" warning, there's no user cap, and the app needs no Google review, as long as the consent screen has no logo and requests no other scopes. Adding a sensitive scope later (e.g. reading the person's other calendars) would bring in verification: a privacy policy covering Google data on the app's domain (B-009), the domain verified in Search Console (D-004) and a demo video.
