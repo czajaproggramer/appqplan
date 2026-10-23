@@ -43,7 +43,7 @@ app.js → picker.js → print.js → export.js → mobile.js → sync.js     (c
 
 - **Classic scripts, one shared global scope.** Top-level `const`, `let` and `function` in `app.js` are visible to the later scripts. There are no modules and no imports. `picker.js`, `print.js` and `export.js` each list the `app.js` names they use in their header comment.
 - **Order matters.** `app.js` must load first. The others only add listeners and functions; none depends on another. `sync.js` replaces `syncHooks` in `app.js` and uses `PHONE_LAYOUT` and `toggleHeaderMenu` from `mobile.js`.
-- **Startup** is the `Init` block at the end of `app.js`: fill `[data-icon]` buttons with SVG icons → `buildRows()` → `applyTimeFormat()` → `showDay(new Date())` → refresh the "now" line every 30 s. `print.js` also starts fetching fonts for the print (`loadEmbeddedFonts()`). `sync.js` shows "Log in" if Firebase is configured, and loads Firebase straight away if this device was logged in.
+- **Startup** is the `Init` block at the end of `app.js`: fill `[data-icon]` buttons with SVG icons → `buildRows()` → `applyTimeFormat()` → `showDay(new Date())` → refresh the "now" line every 30 s. `print.js` also starts fetching fonts for the print (`loadEmbeddedFonts()`). `sync.js` shows the avatar (account menu) if Firebase is configured, and loads Firebase straight away if this device was logged in.
 - **Serve over HTTP, not `file://`.** `print.js` fetches font files, which fails from `file://`.
 
 ---
@@ -139,25 +139,25 @@ A month calendar in a popover under the date button (`#date`). Monday-first, alw
 
 ### `sync.js`
 Optional. Hidden entirely while `FIREBASE_CONFIG` is `null` (and not on `?emulators`).
-- **Loading:** the Firebase SDK (pinned `FIREBASE_SDK` version, `firebase-app`, `-auth`, `-firestore` from gstatic) is imported on demand: when the pointer reaches "Log in" (so the pop-up opens straight on the click), or at startup if `qplan:sync` says this device is logged in.
+- **Loading:** the Firebase SDK (pinned `FIREBASE_SDK` version, `firebase-app`, `-auth`, `-firestore` from gstatic) is imported on demand: when the pointer reaches the avatar (so the pop-up opens straight on the "Log in with Google" click), or at startup if `qplan:sync` says this device is logged in.
 - **Log in:** Google pop-up (`signInWithPopup`). `onAuthChanged` → first log-in of this account on this device (`syncMeta.uid` differs) runs `linkAccount`, otherwise `startSync`.
 - **First log-in (`linkAccount`):** reads all the account's days. If both the device and the account have days, `#merge-dialog` asks: combine (newer edit of each date wins), keep only this device's, keep only the account's, or cancel (logs out). Whatever the device pushes gets the current time as `t`.
 - **Live sync (`startSync`):** `onSnapshot` on the days collection and the user document. A remote day newer than the local `t` is written to `localStorage`; if it's the open day, `refreshOpenDay` redraws it, waiting while an event is being edited or for `REMOTE_APPLY_DELAY_MS` after local typing. Local changes are pushed by `push()` after `PUSH_DELAY_MS`; a day stays `dirty` until the server confirms, so offline edits go up later (even after a reload). The newer edit of a day wins.
-- **Header status:** `#login` when logged out; otherwise `#sync-status`: green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting. On wider screens it opens the `#account-menu` popover (email, Log out, Delete account…); on phones it opens the header menu, where those items are listed. `showStatus` sets `<html data-account="in|out">`, which the phone menu uses to show or hide the account items.
+- **Avatar menu:** `#account-button` (a hand-drawn avatar icon) opens `#account-menu` on every screen size; everything about the account lives there and nowhere else. Logged out: "Log in with Google" (`#login`). Logged in: the email, `#sync-status` (green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting), Log out and Delete account…. Both states also show "Connect to Google Calendar" with a "Soon" tag: a placeholder (`aria-disabled`) that does nothing yet. `showStatus` toggles `#login` and every `[data-logged-in]` element.
 - **Log out** stops syncing and keeps the device's days.
 - **Delete account:** `#delete-dialog` (Cancel focused) → Google re-authentication pop-up → deletes all the user's documents, then the auth user. Local days stay. Other logged-in devices see their days removed, reload the user and are logged out by Firebase.
 - `askDialog` resolves on the form's `submit` (with `close` as the fallback for Esc), because some hidden or background tabs delay the `close` event.
 
 ### `mobile.js`
 Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styles.css`).
-- **Header menu:** `#menu-toggle` opens `#header-menu` (`.is-open`). Any button in it closes it, and so do a tap outside `.header-actions`, Esc, and leaving the phone layout.
+- **Header menu:** `#menu-toggle` opens `#header-menu` (`.is-open`). It holds only Export and Print. Any button in it closes it, and so do a tap anywhere else (the avatar included), Esc, and leaving the phone layout.
 - **To do | Schedule:** the `.view-switch` buttons set `main.page[data-view]` to `todo` (the default) or `schedule`; CSS hides the other sheet. Switching to Schedule scrolls the cursor (now on today, 06:00 on other days) to the middle of the screen; switching to To do scrolls to the top. The choice isn't saved.
 
 ### `index.html` (DOM landmarks)
 - `header.page-header` holds three things:
   - `.day-nav`: `#prev-day`, the `h1.date` > `button#date`, `#next-day`, and the `#picker` popover (`#picker-prev`, `#picker-month`, `#picker-next`, `#picker-days`).
   - `img.brand`: the logo.
-  - `.header-actions`: `#sync-status` (> `.sync-dot` + `#sync-text`), `#menu-toggle` (phones only) and `#header-menu`, which holds `#login`, `#export`, `#print` (with `#print-shortcut`) and `#account-menu`. On wider screens `#header-menu` is `display: contents`, so its buttons sit in the header row.
+  - `.header-actions`: `.account` (`#account-button` and the `#account-menu` popover), `#menu-toggle` (phones only) and `#header-menu` with `#export` and `#print` (with `#print-shortcut`). On wider screens `#header-menu` is `display: contents`, so its buttons sit in the header row. The account menu opens under the avatar, aligned right (left at 721–860px, where the actions sit on the left; on phones it lines up with the header's right edge).
 - `.view-switch` (phones only): the To do | Schedule `.segmented` switch, between the header and `main`.
 - `main.page` (`data-view="todo|schedule"`, used on phones only):
   - `.todo-section` > a ruled paper sheet containing `#todo-priority` (rows 1–3) and `#todo-rest`.
@@ -172,7 +172,7 @@ Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styl
 - Components are ports of Ruled specs to plain CSS: paper sheet, button (`.btn`, `--quiet`, `--ghost`, `--icon`), hand-drawn checkbox, task row, underline input, segmented switch, schedule, events, picker.
 - Layout:
   - **≥ 721px:** the page fits the viewport, and the schedule scrolls inside its own sheet.
-  - **≤ 720px (phones):** one sheet at a time, chosen with the sticky To do | Schedule switch; the whole page scrolls. The schedule's `.sheet-head` (title and time-format switch) is sticky too, just under the switch (`--view-switch-height`). The header is the logo with the sync status and a menu button on the right, then the date. The header buttons and account items are in the menu. No keyboard hints, no `⌘P`, and the to-do sheet has no margin line or priority numbers.
+  - **≤ 720px (phones):** one sheet at a time, chosen with the sticky To do | Schedule switch; the whole page scrolls. The schedule's `.sheet-head` (title and time-format switch) is sticky too, just under the switch (`--view-switch-height`). The header is the logo with the avatar and a menu button on the right, then the date. Export and Print are in the menu. No keyboard hints, no `⌘P`, and the to-do sheet has no margin line or priority numbers.
   - **721–860px:** the header stacks (logo, then date, then actions).
   - **`(hover: none)` (touch screens):** trash, extend and shorten buttons are always visible on events.
 - Light theme only. Ruled ships a dark theme, but **the owner rejected dark mode**. Don't enable it.

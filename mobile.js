@@ -1,10 +1,10 @@
 'use strict';
 
 /* ==========================================================================
-   Phones (≤ 720px): the header buttons live in a menu next to the logo, and a
+   Phones (≤ 720px): Export and Print live in a menu next to the logo, and a
    switch under the header shows either the to-do list or the schedule.
    On wider screens the menu is a plain row of buttons and both sheets show (styles.css).
-   Uses scrollToCursor from app.js; sync.js uses PHONE_LAYOUT and toggleHeaderMenu.
+   Uses scrollToCursor from app.js.
    ========================================================================== */
 const PHONE_LAYOUT = window.matchMedia('(max-width: 720px)');   // keep in sync with styles.css
 const headerMenuEl = document.getElementById('header-menu');
@@ -22,12 +22,12 @@ function closeHeaderMenu() {
 const toggleHeaderMenu = () => (headerMenuEl.classList.contains('is-open') ? closeHeaderMenu() : openHeaderMenu());
 
 menuToggleEl.addEventListener('click', toggleHeaderMenu);
-// Every item (Log in, Export, Print, Log out, Delete account) closes the menu.
+// Every item closes the menu, and so does a tap anywhere else (the avatar included).
 headerMenuEl.addEventListener('click', (e) => {
   if (e.target.closest('button')) closeHeaderMenu();
 });
 document.addEventListener('pointerdown', (e) => {
-  if (headerMenuEl.classList.contains('is-open') && !e.target.closest('.header-actions')) closeHeaderMenu();
+  if (headerMenuEl.classList.contains('is-open') && !headerMenuEl.contains(e.target) && !menuToggleEl.contains(e.target)) closeHeaderMenu();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeHeaderMenu();

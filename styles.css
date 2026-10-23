@@ -90,25 +90,26 @@ kbd {
   .page-header { grid-template-columns: 1fr; justify-items: start; }
   .brand { order: -1; }
   .header-actions { justify-self: start; }
+  .account-menu { right: auto; left: 0; }   /* the avatar sits on the left here */
 }
 
-/* Account: "Log in", or a status dot that opens a small menu (sync.js) */
+/* Account: the avatar opens a menu with everything about the account (sync.js) */
+.account { position: relative; display: flex; }
+#account-button { color: var(--ink); }
+#account-button[aria-expanded="true"] { background: var(--paper-sunk); }
+.account-info {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
 .sync-status {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 40px;
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius-1);
-  background: none;
+  margin: 0;
+  padding: 0 var(--space-4);
   color: var(--ink-muted);
-  cursor: pointer;
-  transition: background-color .12s, color .12s;
 }
-.sync-status:hover,
-.sync-status[aria-expanded="true"] { background: var(--paper-sunk); color: var(--ink); }
-.sync-status:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .sync-dot {
   width: 8px;
   height: 8px;
@@ -126,9 +127,9 @@ kbd {
 .account-menu {
   position: absolute;
   top: calc(100% + var(--space-2));
-  left: 0;
+  right: 0;
   z-index: 10;
-  min-width: 220px;
+  min-width: 290px;
   padding: var(--space-2) 0;
   background: var(--paper-sheet);
   border-radius: var(--radius-0);
@@ -136,7 +137,7 @@ kbd {
 }
 .account-email {
   margin: 0;
-  padding: var(--space-1) var(--space-4) var(--space-2);
+  padding: var(--space-1) var(--space-4);
   color: var(--ink-muted);
   overflow-wrap: anywhere;
 }
@@ -153,6 +154,15 @@ kbd {
 .menu-item:hover { background: var(--paper-sunk); }
 .menu-item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .menu-item--danger { color: var(--danger); }
+.menu-item[aria-disabled="true"] { color: var(--ink-muted); cursor: default; }
+.menu-item[aria-disabled="true"]:hover { background: none; }
+.menu-tag {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-1);
+  white-space: nowrap;
+}
 
 /* Dialogs (sync.js): a sheet of paper over a dimmed page */
 .dialog {
@@ -730,16 +740,9 @@ kbd {
     font: 400 15px/22px var(--font-sans);
   }
   .header-menu .btn:focus-visible { outline-offset: -2px; }
-  .account-menu { display: none; }
-  [data-account="in"] .header-menu .account-menu {
-    display: block;
-    position: static;
-    min-width: 0;
-    margin-top: var(--space-2);
-    padding: var(--space-2) 0 0;
-    border-top: 1px solid var(--rule);
-    box-shadow: none;
-  }
+  /* Line the menu up with the header's right edge, not the avatar's, so it fits on screen */
+  .account { position: static; }
+  .account-menu { right: 0; left: auto; max-width: calc(100vw - 2 * var(--space-4)); }
   .menu-item { height: 44px; }
 
   /* To do | Schedule: stays at the top while the page scrolls */

@@ -6,8 +6,7 @@
    both ways. Each day is one document; the newer edit of a day wins.
    The Firebase SDK is loaded only when someone logs in (or was logged in here).
    Uses state, settings, syncHooks, storageGet, storageSet, dayKey, reloadDay,
-   applyTimeFormat, DAY_STORAGE_PREFIX and SETTINGS_STORAGE_KEY from app.js, and
-   PHONE_LAYOUT and toggleHeaderMenu from mobile.js.
+   applyTimeFormat, DAY_STORAGE_PREFIX and SETTINGS_STORAGE_KEY from app.js.
    Setup and local emulators: firebase/README.md.
    ========================================================================== */
 // The web config from firebase/README.md step 6 (public by design); null hides "Log in".
@@ -48,6 +47,7 @@ let remoteApplyTimer = null;
 let serverConfirmed = false;  // the last snapshot came from the server, not the cache
 let writeFailed = false;
 
+const accountButtonEl = document.getElementById('account-button');
 const loginEl = document.getElementById('login');
 const statusEl = document.getElementById('sync-status');
 const statusTextEl = document.getElementById('sync-text');
@@ -327,17 +327,13 @@ function onSyncError(error) {
   showStatus();
 }
 
-/* ---------- Header: "Log in", or the synced / offline status ---------- */
+/* ---------- Avatar menu: "Log in", or the account, its synced / offline status and actions ---------- */
 function showStatus(override) {
   // syncMeta.loggedIn covers a logged-in device that can't load Firebase (offline at start).
   const loggedIn = Boolean(currentUser) || syncMeta.loggedIn || override === 'connecting';
   loginEl.hidden = loggedIn;
-  statusEl.hidden = !loggedIn;
-  document.documentElement.dataset.account = loggedIn ? 'in' : 'out';   // phones show the account items in the menu
-  if (!loggedIn) {
-    closeAccountMenu();
-    return;
-  }
+  for (const el of accountMenuEl.querySelectorAll('[data-logged-in]')) el.hidden = !loggedIn;
+  if (!loggedIn) return;
   const status = override
     || (navigator.onLine && serverConfirmed && !writeFailed ? 'synced' : 'offline');
   statusEl.dataset.status = status;
@@ -411,31 +407,30 @@ async function deleteAccount() {
 
 function openAccountMenu() {
   accountMenuEl.hidden = false;
-  statusEl.setAttribute('aria-expanded', 'true');
+  accountButtonEl.setAttribute('aria-expanded', 'true');
 }
 function closeAccountMenu() {
   accountMenuEl.hidden = true;
-  statusEl.setAttribute('aria-expanded', 'false');
+  accountButtonEl.setAttribute('aria-expanded', 'false');
 }
 
 if (FIREBASE_CONFIG || USE_EMULATORS) {
-  loginEl.hidden = false;
-  // Start fetching Firebase as soon as the button is approached, so the sign-in pop-up
-  // opens right on the click (browsers block pop-ups opened too long after it).
+  accountButtonEl.parentElement.hidden = false;
+  showStatus();
+  // Start fetching Firebase as soon as the avatar is approached, so the sign-in pop-up
+  // opens right on the "Log in" click (browsers block pop-ups opened too long after it).
   for (const type of ['pointerenter', 'focus', 'touchstart']) {
-    loginEl.addEventListener(type, () => loadFirebase().catch(() => {}), { once: true, passive: true });
+    accountButtonEl.addEventListener(type, () => loadFirebase().catch(() => {}), { once: true, passive: true });
   }
-  loginEl.addEventListener('click', logIn);
-  // Phones: the account items are in the header menu, so the status opens that.
-  statusEl.addEventListener('click', () => {
-    if (PHONE_LAYOUT.matches) toggleHeaderMenu();
-    else if (accountMenuEl.hidden) openAccountMenu();
-    else closeAccountMenu();
+  accountButtonEl.addEventListener('click', () => (accountMenuEl.hidden ? openAccountMenu() : closeAccountMenu()));
+  loginEl.addEventListener('click', () => {
+    closeAccountMenu();
+    logIn();
   });
   document.getElementById('logout').addEventListener('click', logOut);
   document.getElementById('delete-account').addEventListener('click', deleteAccount);
-  document.addEventListener('mousedown', (e) => {
-    if (!accountMenuEl.hidden && !accountMenuEl.contains(e.target) && !statusEl.contains(e.target)) closeAccountMenu();
+  document.addEventListener('pointerdown', (e) => {
+    if (!accountMenuEl.hidden && !accountMenuEl.contains(e.target) && !accountButtonEl.contains(e.target)) closeAccountMenu();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !accountMenuEl.hidden) closeAccountMenu();

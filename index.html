@@ -30,27 +30,32 @@
 
     <img class="brand" src="logos/1-q-tick.svg" alt="QPlan" width="110" height="40">
 
-    <!-- Wider screens: a row of buttons. Phones: the sync status and a menu button,
-         with the buttons inside the menu (mobile.js). -->
+    <!-- The avatar (account menu, sync.js), then Export and Print. Phones: the avatar
+         and a menu button, with Export and Print inside the menu (mobile.js). -->
     <div class="header-actions">
-      <!-- Log in, the status and the account items are shown by sync.js only when Firebase is configured -->
-      <button id="sync-status" class="sync-status sans-label" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" hidden>
-        <span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span>
-      </button>
+      <!-- Shown by sync.js only when Firebase is configured -->
+      <div class="account" hidden>
+        <button id="account-button" class="btn btn--ghost btn--icon" type="button" aria-label="Account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" data-icon="avatar"></button>
+        <div id="account-menu" class="account-menu" hidden>
+          <div class="account-info" data-logged-in>
+            <p id="account-email" class="account-email sans-label"></p>
+            <p id="sync-status" class="sync-status sans-label"><span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span></p>
+          </div>
+          <button id="login" class="menu-item sans-body" type="button">Log in with Google</button>
+          <!-- Placeholder until calendar integration exists -->
+          <button class="menu-item sans-body" type="button" aria-disabled="true">Connect to Google Calendar <span class="menu-tag sans-time">Soon</span></button>
+          <button id="logout" class="menu-item sans-body" type="button" data-logged-in>Log out</button>
+          <button id="delete-account" class="menu-item menu-item--danger sans-body" type="button" data-logged-in>Delete account…</button>
+        </div>
+      </div>
       <button id="menu-toggle" class="btn btn--ghost btn--icon menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="header-menu" data-icon="menu"></button>
       <div id="header-menu" class="header-menu">
-        <button id="login" class="btn btn--quiet" type="button" title="Log in with Google to sync your days across devices" hidden>Log in</button>
         <button id="export" class="btn btn--quiet" type="button" title="Download this day's events as a calendar file (.ics)">
           Export events
         </button>
         <button id="print" class="btn btn--quiet" type="button" title="Export the day as an A4 PNG">
           Print <span id="print-shortcut" class="btn-shortcut sans-time">⌘P</span>
         </button>
-        <div id="account-menu" class="account-menu" hidden>
-          <p id="account-email" class="account-email sans-label"></p>
-          <button id="logout" class="menu-item sans-body" type="button">Log out</button>
-          <button id="delete-account" class="menu-item menu-item--danger sans-body" type="button">Delete account…</button>
-        </div>
       </div>
     </div>
   </header>
