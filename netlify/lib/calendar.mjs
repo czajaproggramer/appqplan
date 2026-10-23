@@ -11,13 +11,16 @@
    Environment (Netlify): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FIREBASE_PROJECT_ID,
    FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY. Setup: firebase/README.md.
    ========================================================================== */
+import { createPublicKey, verify } from 'node:crypto';
+// Only Firestore from firebase-admin: its token checker pulls in packages that crash on
+// older Node runtimes (ERR_REQUIRE_ESM), so log-in tokens are checked below with node:crypto.
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, FieldPath, Timestamp } from 'firebase-admin/firestore';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const FIREBASE_KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const QUARTERS = 96;
 const TIME_BUDGET_MS = 7000;   // Netlify stops a function at 10 s; the browser calls again for the rest
@@ -70,16 +73,50 @@ function firebase() {
         }),
       });
   }
-  return { auth: getAuth(), db: getFirestore() };
+  return { db: getFirestore() };
 }
 
 async function caller(req) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
   try {
-    return await firebase().auth.verifyIdToken(token);
+    return await verifyIdToken(token);
   } catch {
     throw new HttpError(401, 'unauthenticated');
   }
+}
+
+// Google's public keys for Firebase log-in tokens, kept as long as Google says they're valid.
+let firebaseKeys = { expires: 0, keys: {} };
+async function firebaseKey(kid) {
+  if (Date.now() > firebaseKeys.expires || !firebaseKeys.keys[kid]) {
+    const res = await net.fetch(FIREBASE_KEYS_URL);
+    const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('cache-control') || '')?.[1] || 3600);
+    firebaseKeys = { expires: Date.now() + maxAge * 1000, keys: await res.json() };
+  }
+  return firebaseKeys.keys[kid];
+}
+
+// A Firebase ID token, checked the way Firebase documents it: RS256 signed by one of Google's
+// keys, for this project, not expired. Returns its claims plus uid. The Auth emulator's
+// tokens are unsigned, so their signature is only skipped while testing against it.
+async function verifyIdToken(token) {
+  const [head, body, signature] = token.split('.');
+  const decode = (part) => JSON.parse(Buffer.from(part, 'base64url').toString());
+  const header = decode(head);
+  const claims = decode(body);
+  const project = process.env.FIREBASE_PROJECT_ID;
+  const now = Date.now() / 1000;
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    const pem = header.alg === 'RS256' && await firebaseKey(header.kid);
+    if (!pem || !verify('RSA-SHA256', Buffer.from(`${head}.${body}`), createPublicKey(pem), Buffer.from(signature, 'base64url'))) {
+      throw new Error('bad signature');
+    }
+  }
+  if (claims.aud !== project || claims.iss !== `https://securetoken.google.com/${project}`
+      || !(claims.exp > now) || !(claims.iat <= now + 300) || typeof claims.sub !== 'string' || !claims.sub) {
+    throw new Error('bad claims');
+  }
+  return { ...claims, uid: claims.sub };
 }
 
 export const isDayKey = (key) => typeof key === 'string' && DAY_KEY.test(key);

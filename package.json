@@ -6,6 +6,6 @@
     "test:calendar": "node netlify/test/calendar.test.mjs"
   },
   "dependencies": {
-    "firebase-admin": "14.5.0"
+    "firebase-admin": "13.10.0"
   }
 }

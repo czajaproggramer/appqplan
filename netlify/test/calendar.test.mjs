@@ -239,5 +239,33 @@ check('rejects calls without a log-in', anon.status === 401);
 const get = await sync(new Request('http://localhost/x', { method: 'GET' }));
 check('rejects GET', get.status === 405);
 
+// Real (signed) log-in tokens, outside the emulator
+{
+  const { generateKeyPairSync, sign } = await import('node:crypto');
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const keysFetch = lib.net.fetch;
+  lib.net.fetch = async (input, init) => (String(input).includes('securetoken@system')
+    ? new Response(JSON.stringify({ k1: publicKey.export({ type: 'spki', format: 'pem' }) }), { headers: { 'cache-control': 'max-age=60' } })
+    : keysFetch(input, init));
+  const signed = (claims, key = privateKey, kid = 'k1') => {
+    const part = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const input = `${part({ alg: 'RS256', kid })}.${part(claims)}`;
+    return `${input}.${sign('RSA-SHA256', Buffer.from(input), key).toString('base64url')}`;
+  };
+  const now = Math.floor(Date.now() / 1000);
+  const good = { aud: 'demo-qplan', iss: 'https://securetoken.google.com/demo-qplan', sub: 'nobody', iat: now, exp: now + 3600 };
+  const status = async (token) => (await sync(new Request('http://localhost/x', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: '{}' }))).status;
+  const emulator = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  const other = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+  check('accepts a correctly signed token', await status(signed(good)) === 200);
+  check('rejects a token signed by another key', await status(signed(good, other)) === 401);
+  check('rejects another project', await status(signed({ ...good, aud: 'other' })) === 401);
+  check('rejects an expired token', await status(signed({ ...good, exp: now - 10 })) === 401);
+  check('rejects an unknown key id', await status(signed(good, privateKey, 'k9')) === 401);
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = emulator;
+  lib.net.fetch = keysFetch;
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

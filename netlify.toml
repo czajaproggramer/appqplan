@@ -7,10 +7,6 @@
 # calendar.js); the real secrets (GOOGLE_CLIENT_SECRET, FIREBASE_PRIVATE_KEY) stay scanned.
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "FIREBASE_PROJECT_ID,GOOGLE_CLIENT_ID"
-  # firebase-admin's dependencies require() ES modules, which needs Node 22.12+. Older
-  # function runtimes crash before any code runs (ERR_REQUIRE_ESM).
-  NODE_VERSION = "22"
-  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
 
 # Google Calendar sync (netlify/functions/, shared code in netlify/lib/). Netlify installs
 # package.json's dependencies for these; the site itself still has no build step.
