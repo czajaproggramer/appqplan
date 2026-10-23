@@ -80,19 +80,19 @@ kbd {
 .date-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .brand { display: block; height: 40px; width: auto; }
-.header-actions { justify-self: end; display: flex; align-items: center; gap: var(--space-3); }
+.header-actions { position: relative; justify-self: end; display: flex; align-items: center; gap: var(--space-3); }
+.header-actions [hidden] { display: none; }
+.header-menu { display: contents; }   /* phones: a drop-down, see the Mobile section */
+.header-actions .menu-toggle { display: none; }   /* beats .btn, which comes later */
 
 /* Too narrow for three columns: logo on top, then the date, then the actions */
 @media (max-width: 860px) {
   .page-header { grid-template-columns: 1fr; justify-items: start; }
   .brand { order: -1; }
   .header-actions { justify-self: start; }
-  .account-menu { right: auto; left: 0; }   /* the actions sit on the left now */
 }
 
 /* Account: "Log in", or a status dot that opens a small menu (sync.js) */
-.account { position: relative; display: flex; }
-.account [hidden] { display: none; }
 .sync-status {
   display: inline-flex;
   align-items: center;
@@ -126,7 +126,7 @@ kbd {
 .account-menu {
   position: absolute;
   top: calc(100% + var(--space-2));
-  right: 0;
+  left: 0;
   z-index: 10;
   min-width: 220px;
   padding: var(--space-2) 0;
@@ -687,13 +687,87 @@ kbd {
 }
 
 /* ==========================================================================
-   Mobile: one column, to-do on top, whole page scrolls
+   Mobile (≤ 720px, PHONE_LAYOUT in mobile.js): one sheet at a time, chosen with the
+   To do | Schedule switch; the whole page scrolls
    ========================================================================== */
+.view-switch { display: none; }
+
 @media (max-width: 720px) {
-  .page-header { padding: var(--space-6) var(--space-4) 0; }
+  /* Header: the logo, then the status and menu button on the right; the date below */
+  .page-header {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "brand actions" "nav nav";
+    row-gap: var(--space-3);
+    padding: var(--space-6) var(--space-4) 0;
+  }
+  .brand { grid-area: brand; }
+  .day-nav { grid-area: nav; }
+  .header-actions { grid-area: actions; justify-self: end; gap: var(--space-1); }
+  .header-actions .menu-toggle { display: inline-flex; }
+
+  /* The header buttons and account items, in a drop-down under the menu button */
+  .header-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: 0;
+    z-index: 10;
+    flex-direction: column;
+    min-width: 240px;
+    padding: var(--space-2) 0;
+    background: var(--paper-sheet);
+    border-radius: var(--radius-0);
+    box-shadow: var(--shadow-sheet);
+  }
+  .header-menu.is-open { display: flex; }
+  .header-menu .btn {
+    width: 100%;
+    height: 44px;
+    padding: 0 var(--space-4);
+    justify-content: flex-start;
+    border-color: transparent;
+    border-radius: 0;
+    font: 400 15px/22px var(--font-sans);
+  }
+  .header-menu .btn:focus-visible { outline-offset: -2px; }
+  .account-menu { display: none; }
+  [data-account="in"] .header-menu .account-menu {
+    display: block;
+    position: static;
+    min-width: 0;
+    margin-top: var(--space-2);
+    padding: var(--space-2) 0 0;
+    border-top: 1px solid var(--rule);
+    box-shadow: none;
+  }
+  .menu-item { height: 44px; }
+
+  /* To do | Schedule: stays at the top while the page scrolls */
+  .view-switch {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: var(--space-4) var(--space-4) var(--space-2);
+    background: var(--paper);
+  }
+  .view-switch .segmented { display: flex; margin: 0; }
+  .view-switch .segmented button { flex: 1; padding: var(--space-2); font-size: 15px; line-height: 22px; }
+  /* The main navigation on phones, so the open sheet is marked clearly */
+  .view-switch .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--paper-sheet); }
+  .page[data-view="todo"] .schedule-section,
+  .page[data-view="schedule"] .todo-section { display: none; }
+
   .page {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
-    padding: var(--space-6) var(--space-4) var(--space-8);
+    padding: var(--space-4) var(--space-4) var(--space-8);
   }
+
+  /* No keyboard hints, margin line or priority numbers on phones */
+  .hint,
+  .btn-shortcut { display: none; }
+  .paper--margin { padding-left: var(--space-6); }
+  .paper--margin::before { display: none; }
+  .task-number { display: none; }
 }

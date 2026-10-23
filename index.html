@@ -30,12 +30,21 @@
 
     <img class="brand" src="logos/1-q-tick.svg" alt="QPlan" width="110" height="40">
 
+    <!-- Wider screens: a row of buttons. Phones: the sync status and a menu button,
+         with the buttons inside the menu (mobile.js). -->
     <div class="header-actions">
-      <!-- Shown by sync.js only when Firebase is configured -->
-      <div class="account">
+      <!-- Log in, the status and the account items are shown by sync.js only when Firebase is configured -->
+      <button id="sync-status" class="sync-status sans-label" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" hidden>
+        <span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span>
+      </button>
+      <button id="menu-toggle" class="btn btn--ghost btn--icon menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="header-menu" data-icon="menu"></button>
+      <div id="header-menu" class="header-menu">
         <button id="login" class="btn btn--quiet" type="button" title="Log in with Google to sync your days across devices" hidden>Log in</button>
-        <button id="sync-status" class="sync-status sans-label" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" hidden>
-          <span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span>
+        <button id="export" class="btn btn--quiet" type="button" title="Download this day's events as a calendar file (.ics)">
+          Export events
+        </button>
+        <button id="print" class="btn btn--quiet" type="button" title="Export the day as an A4 PNG">
+          Print <span id="print-shortcut" class="btn-shortcut sans-time">⌘P</span>
         </button>
         <div id="account-menu" class="account-menu" hidden>
           <p id="account-email" class="account-email sans-label"></p>
@@ -43,16 +52,18 @@
           <button id="delete-account" class="menu-item menu-item--danger sans-body" type="button">Delete account…</button>
         </div>
       </div>
-      <button id="export" class="btn btn--quiet" type="button" title="Download this day's events as a calendar file (.ics)">
-        Export events
-      </button>
-      <button id="print" class="btn btn--quiet" type="button" title="Export the day as an A4 PNG">
-        Print <span id="print-shortcut" class="btn-shortcut sans-time">⌘P</span>
-      </button>
     </div>
   </header>
 
-  <main class="page">
+  <!-- Phones only: one sheet at a time (mobile.js) -->
+  <div class="view-switch">
+    <div class="segmented" role="group" aria-label="Show">
+      <button type="button" data-view="todo" aria-pressed="true">To do</button>
+      <button type="button" data-view="schedule" aria-pressed="false">Schedule</button>
+    </div>
+  </div>
+
+  <main class="page" data-view="todo">
     <section class="todo-section" aria-labelledby="todo-title">
       <div class="paper paper--ruled paper--margin paper--stacked">
         <h2 id="todo-title" class="sheet-title hand-title">To do</h2>
@@ -142,6 +153,7 @@
   <script src="picker.js"></script>
   <script src="print.js"></script>
   <script src="export.js"></script>
+  <script src="mobile.js"></script>
   <script src="sync.js"></script>
 </body>
 </html>

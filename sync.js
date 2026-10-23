@@ -6,7 +6,8 @@
    both ways. Each day is one document; the newer edit of a day wins.
    The Firebase SDK is loaded only when someone logs in (or was logged in here).
    Uses state, settings, syncHooks, storageGet, storageSet, dayKey, reloadDay,
-   applyTimeFormat, DAY_STORAGE_PREFIX and SETTINGS_STORAGE_KEY from app.js.
+   applyTimeFormat, DAY_STORAGE_PREFIX and SETTINGS_STORAGE_KEY from app.js, and
+   PHONE_LAYOUT and toggleHeaderMenu from mobile.js.
    Setup and local emulators: firebase/README.md.
    ========================================================================== */
 // The web config from firebase/README.md step 6 (public by design); null hides "Log in".
@@ -332,6 +333,7 @@ function showStatus(override) {
   const loggedIn = Boolean(currentUser) || syncMeta.loggedIn || override === 'connecting';
   loginEl.hidden = loggedIn;
   statusEl.hidden = !loggedIn;
+  document.documentElement.dataset.account = loggedIn ? 'in' : 'out';   // phones show the account items in the menu
   if (!loggedIn) {
     closeAccountMenu();
     return;
@@ -424,7 +426,12 @@ if (FIREBASE_CONFIG || USE_EMULATORS) {
     loginEl.addEventListener(type, () => loadFirebase().catch(() => {}), { once: true, passive: true });
   }
   loginEl.addEventListener('click', logIn);
-  statusEl.addEventListener('click', () => (accountMenuEl.hidden ? openAccountMenu() : closeAccountMenu()));
+  // Phones: the account items are in the header menu, so the status opens that.
+  statusEl.addEventListener('click', () => {
+    if (PHONE_LAYOUT.matches) toggleHeaderMenu();
+    else if (accountMenuEl.hidden) openAccountMenu();
+    else closeAccountMenu();
+  });
   document.getElementById('logout').addEventListener('click', logOut);
   document.getElementById('delete-account').addEventListener('click', deleteAccount);
   document.addEventListener('mousedown', (e) => {

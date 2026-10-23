@@ -12,11 +12,12 @@ QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Ea
 
 | Path | What it is | Deployed? |
 |---|---|---|
-| `index.html` | The whole page: header, to-do sheet, schedule sheet, footer form, sync dialogs. Loads the CSS and the five scripts. | Yes |
+| `index.html` | The whole page: header, to-do sheet, schedule sheet, footer form, sync dialogs. Loads the CSS and the six scripts. | Yes |
 | `app.js` | Core: config, state, storage, schedule, to-do list, days, time format, startup. Everything else depends on it. | Yes |
 | `picker.js` | The date picker popover opened by clicking the date. | Yes |
 | `print.js` | "Print": renders the day as an A4 PNG at 300 DPI. Also owns the Cmd/Ctrl+P shortcut. | Yes |
 | `export.js` | "Export events": the day's events as one `.ics` file. | Yes |
+| `mobile.js` | Phones only: the header menu and the To do \| Schedule switch. | Yes |
 | `sync.js` | Optional log-in and cloud sync (Firebase Auth + Firestore). Holds `FIREBASE_CONFIG`. | Yes |
 | `firebase/` | Firestore security rules, Firebase setup steps and the local emulator config (`README.md`). The rules are pasted into the Firebase console by hand. | Served, harmless |
 | `styles.css` | All app styles. App-level tokens at the top; design-system tokens come from `ruled-design-system/tokens.css`. | Yes |
@@ -37,11 +38,11 @@ QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Ea
 
 ```
 ruled-design-system/tokens.css → styles.css
-app.js → picker.js → print.js → export.js → sync.js     (classic <script> tags at the end of <body>)
+app.js → picker.js → print.js → export.js → mobile.js → sync.js     (classic <script> tags at the end of <body>)
 ```
 
 - **Classic scripts, one shared global scope.** Top-level `const`, `let` and `function` in `app.js` are visible to the later scripts. There are no modules and no imports. `picker.js`, `print.js` and `export.js` each list the `app.js` names they use in their header comment.
-- **Order matters.** `app.js` must load first. The others only add listeners and functions; none depends on another. `sync.js` replaces `syncHooks` in `app.js`.
+- **Order matters.** `app.js` must load first. The others only add listeners and functions; none depends on another. `sync.js` replaces `syncHooks` in `app.js` and uses `PHONE_LAYOUT` and `toggleHeaderMenu` from `mobile.js`.
 - **Startup** is the `Init` block at the end of `app.js`: fill `[data-icon]` buttons with SVG icons → `buildRows()` → `applyTimeFormat()` → `showDay(new Date())` → refresh the "now" line every 30 s. `print.js` also starts fetching fonts for the print (`loadEmbeddedFonts()`). `sync.js` shows "Log in" if Firebase is configured, and loads Firebase straight away if this device was logged in.
 - **Serve over HTTP, not `file://`.** `print.js` fetches font files, which fails from `file://`.
 
@@ -120,7 +121,7 @@ Module-level variables alongside: `nextEventId`, `lastHourPress` (for double-pre
 | Days | Date format, day keys, saving and loading, day arrows | `dayKey`, `addDays`, `isViewingToday`, `hasPlans`, `saveDay`, `showDay`, `scrollToFirstHour` |
 | Time format | The am/pm \| 24h switch (`[data-format]` buttons) | `applyTimeFormat` |
 
-`syncHooks` (State section) is told about every saved day and settings change; `sync.js` replaces it. `loadDay` reads the shown day from storage; `reloadDay` redraws it after a change from another device, keeping cursor, scroll and the focused to-do.
+`syncHooks` (State section) is told about every saved day and settings change; `sync.js` replaces it. `loadDay` reads the shown day from storage (`readSavedDay`) and rebuilds it. `reloadDay` shows a change from another device **in place**: when the number of to-do lines is the same it updates the existing rows (the rows' handlers hold the to-do objects, so those objects are updated, not replaced) and `paintDone` toggles the tick, so it animates; events are reconciled by id. Cursor, scroll and the focused to-do stay put.
 | Init | Startup (see §2) | — |
 
 ### `picker.js`
@@ -142,17 +143,23 @@ Optional. Hidden entirely while `FIREBASE_CONFIG` is `null` (and not on `?emulat
 - **Log in:** Google pop-up (`signInWithPopup`). `onAuthChanged` → first log-in of this account on this device (`syncMeta.uid` differs) runs `linkAccount`, otherwise `startSync`.
 - **First log-in (`linkAccount`):** reads all the account's days. If both the device and the account have days, `#merge-dialog` asks: combine (newer edit of each date wins), keep only this device's, keep only the account's, or cancel (logs out). Whatever the device pushes gets the current time as `t`.
 - **Live sync (`startSync`):** `onSnapshot` on the days collection and the user document. A remote day newer than the local `t` is written to `localStorage`; if it's the open day, `refreshOpenDay` redraws it, waiting while an event is being edited or for `REMOTE_APPLY_DELAY_MS` after local typing. Local changes are pushed by `push()` after `PUSH_DELAY_MS`; a day stays `dirty` until the server confirms, so offline edits go up later (even after a reload). The newer edit of a day wins.
-- **Header status:** `#login` when logged out; otherwise `#sync-status`: green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting. It opens `#account-menu` (email, Log out, Delete account…).
+- **Header status:** `#login` when logged out; otherwise `#sync-status`: green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting. On wider screens it opens the `#account-menu` popover (email, Log out, Delete account…); on phones it opens the header menu, where those items are listed. `showStatus` sets `<html data-account="in|out">`, which the phone menu uses to show or hide the account items.
 - **Log out** stops syncing and keeps the device's days.
 - **Delete account:** `#delete-dialog` (Cancel focused) → Google re-authentication pop-up → deletes all the user's documents, then the auth user. Local days stay. Other logged-in devices see their days removed, reload the user and are logged out by Firebase.
 - `askDialog` resolves on the form's `submit` (with `close` as the fallback for Esc), because some hidden or background tabs delay the `close` event.
+
+### `mobile.js`
+Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styles.css`).
+- **Header menu:** `#menu-toggle` opens `#header-menu` (`.is-open`). Any button in it closes it, and so do a tap outside `.header-actions`, Esc, and leaving the phone layout.
+- **To do | Schedule:** the `.view-switch` buttons set `main.page[data-view]` to `todo` (the default) or `schedule`; CSS hides the other sheet. Switching to Schedule scrolls the cursor (now on today, 06:00 on other days) to the middle of the screen; switching to To do scrolls to the top. The choice isn't saved.
 
 ### `index.html` (DOM landmarks)
 - `header.page-header` holds three things:
   - `.day-nav`: `#prev-day`, the `h1.date` > `button#date`, `#next-day`, and the `#picker` popover (`#picker-prev`, `#picker-month`, `#picker-next`, `#picker-days`).
   - `img.brand`: the logo.
-  - `.header-actions`: `.account` (`#login`, `#sync-status` > `.sync-dot` + `#sync-text`, `#account-menu`), `#export` and `#print` (with `#print-shortcut`).
-- `main.page`:
+  - `.header-actions`: `#sync-status` (> `.sync-dot` + `#sync-text`), `#menu-toggle` (phones only) and `#header-menu`, which holds `#login`, `#export`, `#print` (with `#print-shortcut`) and `#account-menu`. On wider screens `#header-menu` is `display: contents`, so its buttons sit in the header row.
+- `.view-switch` (phones only): the To do | Schedule `.segmented` switch, between the header and `main`.
+- `main.page` (`data-view="todo|schedule"`, used on phones only):
   - `.todo-section` > a ruled paper sheet containing `#todo-priority` (rows 1–3) and `#todo-rest`.
   - `.schedule-section` > the schedule sheet, which has a `.sheet-head` (the title and the `.segmented` time-format switch) and `#schedule` (focusable, `tabindex="0"`).
     - `#schedule` > `#rows`, which holds the 96 generated `.row`s, the closing `00:00` label, and `#layer`.
@@ -165,8 +172,8 @@ Optional. Hidden entirely while `FIREBASE_CONFIG` is `null` (and not on `?emulat
 - Components are ports of Ruled specs to plain CSS: paper sheet, button (`.btn`, `--quiet`, `--ghost`, `--icon`), hand-drawn checkbox, task row, underline input, segmented switch, schedule, events, picker.
 - Layout:
   - **≥ 721px:** the page fits the viewport, and the schedule scrolls inside its own sheet.
-  - **≤ 720px:** one column, the to-do list on top, and the whole page scrolls.
-  - **≤ 860px:** the header stacks (logo, then date, then actions).
+  - **≤ 720px (phones):** one sheet at a time, chosen with the sticky To do | Schedule switch; the whole page scrolls. The header is the logo with the sync status and a menu button on the right, then the date. The header buttons and account items are in the menu. No keyboard hints, no `⌘P`, and the to-do sheet has no margin line or priority numbers.
+  - **721–860px:** the header stacks (logo, then date, then actions).
   - **`(hover: none)` (touch screens):** trash, extend and shorten buttons are always visible on events.
 - Light theme only. Ruled ships a dark theme, but **the owner rejected dark mode**. Don't enable it.
 
@@ -239,7 +246,7 @@ The print reads the same tokens at runtime, so a token change shows up in both.
   - toggle 24h;
   - Print (PNG is 2480 × 3508 and the fonts render);
   - Export (`.ics` times in UTC);
-  - check both desktop (≥ 721px) and phone widths;
+  - check both desktop (≥ 721px) and phone widths (menu, To do | Schedule switch);
   - sync (emulators): log in on two origins, edit on one and see it on the other, first log-in dialog, log out, delete account.
 
 ---
@@ -270,6 +277,7 @@ Separate Node project (`playwright-core`, `ffmpeg` required). It drives the **re
 | The calendar export | `buildIcs()` in `export.js` |
 | Saved data shape | `saveDay` and `showDay` in `app.js`, plus a migration (see `CLAUDE.md`), plus the marketing seed scripts |
 | Header, footer, page structure | `index.html` |
+| Phone header menu, To do \| Schedule switch | `mobile.js`, and the Mobile section at the end of `styles.css` |
 | Sync, log-in, account deletion | `sync.js`; who may read/write what: `firebase/firestore.rules` (then paste into the console) |
 
 ---

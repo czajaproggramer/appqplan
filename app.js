@@ -86,6 +86,7 @@ const ICONS = {
   minus: 'M4.3 10.1c3.8-.2 7.6.1 11.4-.1',
   left: 'M12.3 4.6c-2.2 1.9-4.1 3.6-6 5.5 1.9 1.8 3.9 3.5 5.9 5.3',
   right: 'M7.7 4.6c2.2 1.9 4.1 3.6 6 5.5-1.9 1.8-3.9 3.5-5.9 5.3',
+  menu: 'M4.2 5.9c3.9-.2 7.7.1 11.6-.1M4.2 10.1c3.9-.1 7.7 0 11.6-.1M4.2 14.2c3.9-.2 7.7.1 11.6-.1',
   trash: 'M4.5 6.1c3.7-.2 7.3.1 11-.1M8.2 5.9c0-1.1.1-1.7.2-2.2 1.1-.1 2.2 0 3.3-.1.1.6.1 1.3.1 2.2M5.9 6.4c.3 3.2.4 6.4.8 9.6 2.3.2 4.5 0 6.7.1.3-3.2.5-6.4.7-9.6',
 };
 const icon = (name, size = 16) =>
@@ -463,17 +464,11 @@ function createTodoEl(todo, index) {
       <path class="check-tick" d="${CHECK_TICK}" pathLength="1"/>
     </svg>`;
   const check = label.querySelector('.check-input');
-  check.checked = todo.done;
-  const syncDone = () => {
-    li.classList.toggle('is-done', todo.done);
-    label.classList.toggle('is-checked', todo.done);
-  };
   check.addEventListener('change', () => {
     todo.done = check.checked;
-    syncDone();
+    paintDone(li, todo.done);
     saveDay();
   });
-  syncDone();
 
   const text = document.createElement('input');
   text.type = 'text';
@@ -486,7 +481,15 @@ function createTodoEl(todo, index) {
   text.addEventListener('keydown', (e) => onTodoKey(e, index, check));
 
   li.append(label, text);
+  paintDone(li, todo.done);
   return li;
+}
+
+// Ticks or unticks a row. Changing an existing row animates the tick (styles.css).
+function paintDone(li, done) {
+  li.querySelector('.check-input').checked = done;
+  li.classList.toggle('is-done', done);
+  li.querySelector('.check').classList.toggle('is-checked', done);
 }
 
 function renderTodos(focusIndex) {
@@ -563,14 +566,18 @@ function saveDay() {
 
 // Reads the shown day from storage into state and redraws the to-do list.
 function loadDay() {
+  readSavedDay();
+  for (const el of eventEls.values()) el.remove();
+  eventEls.clear();
+  renderTodos();
+}
+
+function readSavedDay() {
   const saved = storageGet(dayStorageKey(state.date));
   state.todos = (saved?.todos || []).map((t) => ({ text: t.text || '', done: !!t.done }));
   while (state.todos.length < DEFAULT_TODOS) state.todos.push({ text: '', done: false });
   state.events = (saved?.events || []).map((e) => ({ ...e }));
   nextEventId = Math.max(0, ...state.events.map((e) => e.id)) + 1;
-  for (const el of eventEls.values()) el.remove();
-  eventEls.clear();
-  renderTodos();
 }
 
 function showDay(date) {
@@ -589,15 +596,30 @@ function showDay(date) {
   scrollToFirstHour();
 }
 
-// Shows a change to the open day made on another device (sync.js). Keeps the cursor,
-// the scroll position and the focused to-do line. Not called while an event is being edited.
+// Shows a change to the open day made on another device (sync.js). Updates the page in
+// place, so ticks animate and the cursor, scroll and focused to-do line stay put.
+// Not called while an event is being edited.
 function reloadDay() {
-  const todoInputs = [...document.querySelectorAll('.task-text')];
-  const focusedTodo = todoInputs.indexOf(document.activeElement);
+  const rows = document.querySelectorAll('.task');
+  const focusedTodo = [...document.querySelectorAll('.task-text')].indexOf(document.activeElement);
+  const oldTodos = state.todos;
   clearPendingDelete();
-  loadDay();
+  readSavedDay();   // events are reconciled by id in render()
+
+  if (state.todos.length === oldTodos.length) {
+    // The rows' handlers hold the old to-do objects, so update those.
+    state.todos.forEach((todo, i) => {
+      Object.assign(oldTodos[i], todo);
+      const input = rows[i].querySelector('.task-text');
+      if (input.value !== todo.text) input.value = todo.text;
+      paintDone(rows[i], todo.done);
+    });
+    state.todos = oldTodos;
+  } else {
+    renderTodos();
+    if (focusedTodo !== -1) focusTodo(Math.min(focusedTodo, state.todos.length - 1));
+  }
   render();
-  if (focusedTodo !== -1) focusTodo(Math.min(focusedTodo, state.todos.length - 1));
 }
 
 // Earlier hours are a scroll up.
