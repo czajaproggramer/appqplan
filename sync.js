@@ -55,6 +55,15 @@ const accountMenuEl = document.getElementById('account-menu');
 const mergeDialogEl = document.getElementById('merge-dialog');
 const deleteDialogEl = document.getElementById('delete-dialog');
 
+// Told about the account's Google Calendar link and the days that reach the server.
+// calendar.js replaces these.
+const calendarHooks = {
+  statusChanged(calendar) {},          // users/{uid}.calendar, or undefined
+  daySaved() {},                       // a day was confirmed by the server
+  loggedInChanged(loggedIn) {},
+  async beforeAccountDelete() {},      // after re-authentication, before the data goes
+};
+
 /* ---------- Local changes (always tracked) ---------- */
 syncHooks.dayChanged = (key) => {
   syncMeta.days[key] = { t: Date.now(), dirty: true };
@@ -228,6 +237,7 @@ async function startSync(user) {
         applyRemoteSettings(data);
         saveSyncMeta();
       }
+      calendarHooks.statusChanged(data?.calendar);
     }, onSyncError),
   ];
   push();
@@ -306,11 +316,17 @@ async function push() {
     if (!meta.dirty) continue;
     const t = meta.t;
     const day = storageGet(DAY_STORAGE_PREFIX + key);
-    const data = day
-      ? { todos: day.todos, events: day.events, deleted: false, updatedAt: t }
-      : { todos: [], events: [], deleted: true, updatedAt: t };
+    // tz: the zone this day was planned in (Google Calendar sync). serverUpdatedAt lets the
+    // calendar function find days saved since its last run, whatever the device clocks say.
+    const data = {
+      ...(day ? { todos: day.todos, events: day.events, deleted: false } : { todos: [], events: [], deleted: true }),
+      updatedAt: t,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      serverUpdatedAt: fb.f.serverTimestamp(),
+    };
     write(fb.f.doc(daysCollection(fb, uid), key), data, t, () => {
       if (syncMeta.days[key]?.t === t) syncMeta.days[key].dirty = false;
+      calendarHooks.daySaved();
     });
   }
   if (syncMeta.settings.dirty) {
@@ -333,6 +349,7 @@ function showStatus(override) {
   const loggedIn = Boolean(currentUser) || syncMeta.loggedIn || override === 'connecting';
   loginEl.hidden = loggedIn;
   for (const el of accountMenuEl.querySelectorAll('[data-logged-in]')) el.hidden = !loggedIn;
+  calendarHooks.loggedInChanged(loggedIn);
   if (!loggedIn) return;
   const status = override
     || (navigator.onLine && serverConfirmed && !writeFailed ? 'synced' : 'offline');
@@ -382,6 +399,7 @@ async function deleteAccount() {
   stopSync();
   showStatus('connecting');
   try {
+    await calendarHooks.beforeAccountDelete();
     const days = await fb.f.getDocs(daysCollection(fb, user.uid));
     const refs = [...days.docs.map((d) => d.ref), userDoc(fb, user.uid)];
     for (let i = 0; i < refs.length; i += 400) {

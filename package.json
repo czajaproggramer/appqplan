@@ -1,0 +1,11 @@
+{
+  "name": "qplan",
+  "private": true,
+  "description": "The app is static and needs no install. These dependencies are only for the Netlify Functions in netlify/functions/.",
+  "scripts": {
+    "test:calendar": "node netlify/test/calendar.test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0"
+  }
+}

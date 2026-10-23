@@ -42,8 +42,10 @@
             <p id="sync-status" class="sync-status sans-label"><span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span></p>
           </div>
           <button id="login" class="menu-item sans-body" type="button">Log in with Google</button>
-          <!-- Placeholder until calendar integration exists -->
-          <button class="menu-item sans-body" type="button" aria-disabled="true">Connect to Google Calendar <span class="menu-tag sans-time">Soon</span></button>
+          <!-- Google Calendar (calendar.js). Without a client id it stays a "Soon" placeholder. -->
+          <button id="calendar-connect" class="menu-item sans-body" type="button" aria-disabled="true"><span id="calendar-label">Connect to Google Calendar</span> <span id="calendar-soon" class="menu-tag sans-time">Soon</span></button>
+          <p id="calendar-note" class="menu-note sans-label" hidden></p>
+          <button id="calendar-disconnect" class="menu-item sans-body" type="button" hidden>Disconnect Google Calendar…</button>
           <button id="logout" class="menu-item sans-body" type="button" data-logged-in>Log out</button>
           <button id="delete-account" class="menu-item menu-item--danger sans-body" type="button" data-logged-in>Delete account…</button>
         </div>
@@ -147,9 +149,33 @@
       <h2 id="delete-title" class="hand-title">Delete your account?</h2>
       <p class="sans-body">This permanently deletes your QPlan account and every day synced to it. It can't be undone.</p>
       <p class="sans-body">The days saved on this device stay here. Google will ask you to confirm it's you.</p>
+      <label id="delete-calendar-row" class="dialog-check sans-body" hidden>
+        <input id="delete-calendar" type="checkbox" checked> Also delete the QPlan calendar from Google Calendar
+      </label>
       <div class="dialog-actions">
         <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
         <button class="btn btn--danger" value="delete">Delete account</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Disconnecting Google Calendar (calendar.js) -->
+  <dialog id="calendar-dialog" class="dialog" aria-labelledby="calendar-title">
+    <form method="dialog">
+      <h2 id="calendar-title" class="hand-title">Disconnect Google Calendar?</h2>
+      <p class="sans-body">QPlan stops sending your blocks to Google. What should happen to the QPlan calendar there?</p>
+      <div class="dialog-choices">
+        <button class="choice" value="delete" autofocus>
+          <span class="choice-title hand-task">Delete it from Google</span>
+          <span class="choice-text sans-body">The QPlan calendar and all its blocks disappear from Google Calendar.</span>
+        </button>
+        <button class="choice" value="keep">
+          <span class="choice-title hand-task">Keep it in Google</span>
+          <span class="choice-text sans-body">The blocks stay but stop updating. You can delete the calendar in Google later.</span>
+        </button>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn--ghost" value="cancel">Cancel</button>
       </div>
     </form>
   </dialog>
@@ -160,5 +186,6 @@
   <script src="export.js"></script>
   <script src="mobile.js"></script>
   <script src="sync.js"></script>
+  <script src="calendar.js"></script>
 </body>
 </html>

@@ -1,3 +1,10 @@
 # QPlan is a static site: no build step, Netlify serves this folder as is.
 [build]
   publish = "."
+
+# Google Calendar sync (netlify/functions/, shared code in netlify/lib/). Netlify installs
+# package.json's dependencies for these; the site itself still has no build step.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["firebase-admin"]

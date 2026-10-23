@@ -2,9 +2,9 @@
 
 The source of truth for how QPlan is built. Read this before changing code. Keep it current: if a change makes any part of this file wrong, update it in the same commit.
 
-QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Each day has a to-do list (the first three lines are highlighted priorities) and a 24-hour schedule in 15-minute rows. Days are saved in `localStorage`. Logging in with Google (optional) syncs days and settings across devices through Firebase. A day can be printed as an A4 PNG and its events exported as an `.ics` calendar file. Live at https://q-plan.netlify.app.
+QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Each day has a to-do list (the first three lines are highlighted priorities) and a 24-hour schedule in 15-minute rows. Days are saved in `localStorage`. Logging in with Google (optional) syncs days and settings across devices through Firebase, and can send the day's blocks one way to a "QPlan" calendar in Google Calendar. A day can be printed as an A4 PNG and its events exported as an `.ics` calendar file. Live at https://q-plan.netlify.app.
 
-**No framework, no build step.** Plain HTML, CSS and JavaScript, served as static files. The only runtime dependency is the Firebase SDK, loaded from Google's CDN by `sync.js` only for people who log in.
+**No framework, no build step.** Plain HTML, CSS and JavaScript, served as static files. The only runtime dependencies are Google's: the Firebase SDK, loaded by `sync.js` only for people who log in, and Google Identity Services (`accounts.google.com/gsi/client`, which Google doesn't let you pin to a version), loaded by `calendar.js` only when someone opens the account menu to connect Google Calendar. The Google Calendar server side is three Netlify Functions (§4, §7).
 
 ---
 
@@ -19,11 +19,14 @@ QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Ea
 | `export.js` | "Export events": the day's events as one `.ics` file. | Yes |
 | `mobile.js` | Phones only: the header menu and the To do \| Schedule switch. | Yes |
 | `sync.js` | Optional log-in and cloud sync (Firebase Auth + Firestore). Holds `FIREBASE_CONFIG`. | Yes |
-| `firebase/` | Firestore security rules, Firebase setup steps and the local emulator config (`README.md`). The rules are pasted into the Firebase console by hand. | Served, harmless |
+| `calendar.js` | Google Calendar in the browser: connect, "something changed", disconnect, the menu states. Holds `GOOGLE_CLIENT_ID`. | Yes |
+| `netlify/functions/` | `calendar-connect`, `calendar-sync`, `calendar-disconnect` (Netlify Functions). Shared code in `netlify/lib/calendar.mjs`; test in `netlify/test/`. | As functions (the source is also served as files, harmless) |
+| `package.json`, `package-lock.json` | The functions' only dependency, `firebase-admin`. Netlify installs it; the app needs no install. `node_modules/` is git-ignored. | — |
+| `firebase/` | Firestore security rules, Firebase and Google Calendar setup steps and the local emulator config (`README.md`). The rules are pasted into the Firebase console by hand. | Served, harmless |
 | `styles.css` | All app styles. App-level tokens at the top; design-system tokens come from `ruled-design-system/tokens.css`. | Yes |
 | `ruled-design-system/` | The **Ruled** design system: tokens, fonts, component specs. Treat as a vendored dependency (read it, don't edit it). Start with its `README.md`. | Yes (fonts and tokens are used by the app) |
 | `logos/` | QPlan logo concepts. The app uses `1-q-tick.svg` (header) and `1-q-tick-icon.svg` (favicon). `logos/index.html` is a comparison page. | Yes |
-| `netlify.toml` | Tells Netlify to publish the repo root with no build. | — |
+| `netlify.toml` | Tells Netlify to publish the repo root with no build, and where the functions are. | — |
 | `CLAUDE.md` | Rules for agent sessions. Read it. | — |
 | `.claude/launch.json` | Local preview server (`planner`: Python static server on port 5173). | Tracked, so possibly served; harmless |
 | `.claude/skills/work/` | The `/work` skill for the growth program. Not part of the app. | Not tracked |
@@ -38,7 +41,7 @@ QPlan is a keyboard-first, one-day planner that runs entirely in the browser. Ea
 
 ```
 ruled-design-system/tokens.css → styles.css
-app.js → picker.js → print.js → export.js → mobile.js → sync.js     (classic <script> tags at the end of <body>)
+app.js → picker.js → print.js → export.js → mobile.js → sync.js → calendar.js     (classic <script> tags at the end of <body>)
 ```
 
 - **Classic scripts, one shared global scope.** Top-level `const`, `let` and `function` in `app.js` are visible to the later scripts. There are no modules and no imports. `picker.js`, `print.js` and `export.js` each list the `app.js` names they use in their header comment.
@@ -98,11 +101,12 @@ Module-level variables alongside: `nextEventId`, `lastHourPress` (for double-pre
 
 | Document | Value |
 |---|---|
-| `users/{uid}` | `{ settings: { timeFormat }, settingsUpdatedAt }` |
-| `users/{uid}/days/{YYYY-MM-DD}` | `{ todos, events, deleted: false, updatedAt }`, or `{ todos: [], events: [], deleted: true, updatedAt }` for a day that was emptied |
+| `users/{uid}` | `{ settings: { timeFormat }, settingsUpdatedAt, calendar? }`. `calendar` = `{ status: 'connected' \| 'reconnect' \| 'removed', email }`, written only by the calendar functions |
+| `users/{uid}/days/{YYYY-MM-DD}` | `{ todos, events, deleted: false, updatedAt, tz, serverUpdatedAt }`, or `{ todos: [], events: [], deleted: true, … }` for a day that was emptied |
+| `calendarLinks/{uid}` | Server only: `{ refreshToken, calendarId, googleSub, email, tz, syncedUntil, backfillFrom, connectedAt }` |
 
-- Same shapes as `localStorage`, plus `updatedAt` (ms). Emptied days stay as `deleted: true` markers so other devices remove them too. Documents are only really deleted with the account.
-- `firebase/firestore.rules`: each user reads and writes only `users/{their uid}/…`.
+- Same shapes as `localStorage`, plus `updatedAt` (ms, device clock), `tz` (the IANA zone of the device that pushed the day: Google Calendar uses it) and `serverUpdatedAt` (server time, so the calendar function can find what changed whatever the device clocks say). `tz` and `serverUpdatedAt` exist only in the cloud, never in `localStorage`. Emptied days stay as `deleted: true` markers so other devices remove them too. Documents are only really deleted with the account.
+- `firebase/firestore.rules`: each user reads and writes only `users/{their uid}/…`; browsers can't change `users/{uid}.calendar`, must set `serverUpdatedAt` to the request time (or leave it as it was), and can't touch `calendarLinks` at all.
 
 ---
 
@@ -143,10 +147,20 @@ Optional. Hidden entirely while `FIREBASE_CONFIG` is `null` (and not on `?emulat
 - **Log in:** Google pop-up (`signInWithPopup`). `onAuthChanged` → first log-in of this account on this device (`syncMeta.uid` differs) runs `linkAccount`, otherwise `startSync`.
 - **First log-in (`linkAccount`):** reads all the account's days. If both the device and the account have days, `#merge-dialog` asks: combine (newer edit of each date wins), keep only this device's, keep only the account's, or cancel (logs out). Whatever the device pushes gets the current time as `t`.
 - **Live sync (`startSync`):** `onSnapshot` on the days collection and the user document. A remote day newer than the local `t` is written to `localStorage`; if it's the open day, `refreshOpenDay` redraws it, waiting while an event is being edited or for `REMOTE_APPLY_DELAY_MS` after local typing. Local changes are pushed by `push()` after `PUSH_DELAY_MS`; a day stays `dirty` until the server confirms, so offline edits go up later (even after a reload). The newer edit of a day wins.
-- **Avatar menu:** `#account-button` (a hand-drawn avatar icon) opens `#account-menu` on every screen size; everything about the account lives there and nowhere else. Logged out: "Log in with Google" (`#login`). Logged in: the email, `#sync-status` (green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting), Log out and Delete account…. Both states also show "Connect to Google Calendar" with a "Soon" tag: a placeholder (`aria-disabled`) that does nothing yet. `showStatus` toggles `#login` and every `[data-logged-in]` element.
+- **Avatar menu:** `#account-button` (a hand-drawn avatar icon) opens `#account-menu` on every screen size; everything about the account lives there and nowhere else. Logged out: "Log in with Google" (`#login`). Logged in: the email, `#sync-status` (green breathing dot + "synced" when the last snapshot came from the server and no write failed, grey + "offline" otherwise, grey + "syncing" while connecting), Log out and Delete account…. The Google Calendar items in between belong to `calendar.js`. `showStatus` toggles `#login` and every `[data-logged-in]` element.
+- **`calendarHooks`** (replaced by `calendar.js`): `statusChanged` gets `users/{uid}.calendar` from the user-document snapshot, `daySaved` fires when the server confirms a day, `loggedInChanged` from `showStatus`, `beforeAccountDelete` runs after re-authentication and before the data is deleted. `push()` adds `tz` and `serverUpdatedAt` to every day it writes.
 - **Log out** stops syncing and keeps the device's days.
 - **Delete account:** `#delete-dialog` (Cancel focused) → Google re-authentication pop-up → deletes all the user's documents, then the auth user. Local days stay. Other logged-in devices see their days removed, reload the user and are logged out by Firebase.
 - `askDialog` resolves on the form's `submit` (with `close` as the fallback for Esc), because some hidden or background tabs delay the `close` event.
+
+### `calendar.js` and `netlify/` (Google Calendar, one way: QPlan → Google)
+Off (a "Soon" placeholder in the account menu) while `GOOGLE_CLIENT_ID` is `null`. Setup: `firebase/README.md`.
+- **Connect:** the account menu preloads Google Identity Services when it opens. "Connect to Google Calendar" opens Google's consent pop-up (code flow, scope `calendar.app.created` + `openid email`, `login_hint` = the log-in email) and posts the one-time code to `calendar-connect` with the device's zone and today's key. The function swaps it for a refresh token and refuses it (revoking it) if the calendar permission was unticked, the Google account isn't the log-in account (Google `sub` vs the Firebase Google identity), or Google gave no refresh token (an older grant was still active: revoking it makes the next try work). It creates the "QPlan" calendar (or reuses the old one when reconnecting), saves `calendarLinks/{uid}`, sets `users/{uid}.calendar`, and backfills **today onward**.
+- **Sync:** `calendar.js` asks `calendar-sync` to run `CALENDAR_SYNC_DELAY_MS` after the server confirms a saved day, and once per page load with today + 7 days as `heal`. The function never trusts the browser's data: it reads Firestore. Work order, resumable when a call runs out of its ~7 s (the reply says `more: true` and the browser calls again): backfill (by date), then days with `serverUpdatedAt` after `syncedUntil` (past days included once connected), then the `heal` days.
+- **One day (`syncDay`), QPlan wins:** lists the day's QPlan events (by the private extended property `qplanDay`) and any event without that property in a ±14 h window around the date, deletes the ones QPlan doesn't have (hand-made events included), and creates or updates the rest. Event ids are `qp<YYYYMMDD>e<id>` (base32hex), so two syncs at once can't make duplicates; QPlan reuses event numbers, so a "409 already exists" (Google keeps deleted events) is answered by a `PUT` that restores it. Times are wall times with the day's `tz` (an event ending at 96 ends at 00:00 the next day), colours map tones to Google colours, reminders are off, unnamed events are skipped.
+- **States** (`users/{uid}.calendar.status`): `connected`; `reconnect` (Google refused the refresh token: access revoked in Google; the menu offers "Reconnect"); `removed` (the QPlan calendar was deleted in Google: the link is dropped, as if disconnected). No status = not connected.
+- **Disconnect:** `#calendar-dialog` asks to delete the calendar from Google or keep it (frozen); `calendar-disconnect` then revokes access and drops the link. Deleting the account calls it first, deleting the calendar if the `#delete-calendar` box in `#delete-dialog` is ticked (shown only while connected).
+- Not gated behind Pro yet (owner decision: decide later). A check would go in `syncUser`/`calendar-connect` and `renderCalendar`.
 
 ### `mobile.js`
 Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styles.css`).
@@ -165,7 +179,8 @@ Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styl
     - `#schedule` > `#rows`, which holds the 96 generated `.row`s, the closing `00:00` label, and `#layer`.
     - `#layer` holds `#now`, `#cursor` and the `.event` elements.
 - `footer.page-footer` > a plain **Netlify form** `product-updates` (§7). It has **no JavaScript**.
-- `dialog#merge-dialog` and `dialog#delete-dialog` after the footer (`sync.js`).
+- `dialog#merge-dialog` and `dialog#delete-dialog` (with the `#delete-calendar-row` checkbox) after the footer (`sync.js`), and `dialog#calendar-dialog` (`calendar.js`).
+- In `#account-menu`: `#calendar-connect` (> `#calendar-label`, and `#calendar-soon` until configured), `#calendar-note`, `#calendar-disconnect`.
 
 ### `styles.css`
 - `:root` at the top holds app tokens: `--hour-height` (96px, deliberately overriding Ruled's 64px so a 15-minute row is tall enough for a title), `--row-height` = hour / 4, `--label-width`, `--lane-offset`, `--todo-width`, `--page-max-width`, the four `--event-*` tones (light tints built from Ruled tokens; yellow is reserved for the to-do highlighter), and `--status-synced` (green dot) / `--danger` (delete account), because Ruled has no status colours.
@@ -240,7 +255,8 @@ The print reads the same tokens at runtime, so a token change shows up in both.
 - **Netlify Forms:** the footer form (`name="product-updates"`, `data-netlify="true"`, honeypot `bot-field`) is a plain HTML POST. Netlify detects it at deploy time; that requires *Form detection* to be enabled in the site settings, and a redeploy after enabling it. Submissions show in the Netlify dashboard. Submitting locally fails (the Python server returns 501); that's expected.
 - **Local preview:** `python3 -m http.server 5173` from the repo root (the `planner` entry in `.claude/launch.json`), then http://localhost:5173.
 - **Firebase** (sync): project setup, authorized domains and the rules are in `firebase/README.md`. Free Spark plan, Firestore in `eur3`. The web config in `sync.js` is public by design; never commit a service-account key. When the domain changes, add it to Authentication → Authorized domains. To test sync locally without a project, run the emulators (`firebase/README.md`) and open http://localhost:5173/?emulators; a second origin (http://127.0.0.1:5173/?emulators) acts as a second device.
-- **No automated tests.** Verify in a browser:
+- **Netlify Functions** (Google Calendar): `netlify/functions/`, bundled by Netlify with `firebase-admin` left as an external module. Environment variables (Netlify site settings, never the repo): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`. Google Cloud setup is in `firebase/README.md`. The Firebase emulators can't imitate Google Calendar: `npm run test:calendar` (emulators running) drives the real functions against the emulators and a fake Google; a real end-to-end test needs a Google account and the Netlify CLI (`netlify dev`, port 8888).
+- **No automated tests for the app** (only the calendar functions, above). Verify in a browser:
   - create, extend, rename and delete events;
   - switch days and reload (data persists);
   - toggle 24h;
@@ -277,6 +293,7 @@ Separate Node project (`playwright-core`, `ffmpeg` required). It drives the **re
 | The calendar export | `buildIcs()` in `export.js` |
 | Saved data shape | `saveDay` and `showDay` in `app.js`, plus a migration (see `CLAUDE.md`), plus the marketing seed scripts |
 | Header, footer, page structure | `index.html` |
+| Google Calendar: what is sent and how | `syncDay`/`desiredEvents` in `netlify/lib/calendar.mjs`; menu and triggers in `calendar.js` |
 | Phone header menu, To do \| Schedule switch | `mobile.js`, and the Mobile section at the end of `styles.css` |
 | Sync, log-in, account deletion | `sync.js`; who may read/write what: `firebase/firestore.rules` (then paste into the console) |
 
@@ -287,4 +304,4 @@ Separate Node project (`playwright-core`, `ffmpeg` required). It drives the **re
 - The repo is public: no secrets, no `.env`, no revenue figures, nothing from `progress/`.
 - Don't break saved data: keep the `qplan:day:YYYY-MM-DD` and `qplan:settings` format, or migrate.
 - Don't add user-facing features that weren't asked for or approved in `progress/plan.md`. Offer them instead. Examples already rejected: dark mode, a keyboard-driven date picker.
-- Keep it static: no build step, no framework, no runtime dependencies in the app, except the Firebase SDK that `sync.js` loads only for people who log in.
+- Keep it static: no build step, no framework, no runtime dependencies in the app, except Google's: the Firebase SDK (`sync.js`, only for people who log in) and Google Identity Services (`calendar.js`, only when connecting Google Calendar). Server code lives only in `netlify/functions/`.

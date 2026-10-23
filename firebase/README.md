@@ -28,3 +28,48 @@ cd firebase && npx firebase-tools@15.34.1 emulators:start --project demo-qplan
 ```
 
 Then open http://localhost:5173/?emulators. The app talks to the local Auth and Firestore emulators instead of Firebase. The Google sign-in pop-up offers fake accounts. Emulator UI (data, users): http://localhost:4000.
+
+## Google Calendar sync: one-time setup (about 20 minutes)
+
+Logged-in users can send their QPlan blocks to a separate "QPlan" calendar in their Google account (one way: QPlan → Google). The browser part is `calendar.js`; the server part is three Netlify Functions in `netlify/functions/`. Everything below happens in the same Google project Firebase created (`qplan-5c4d7`).
+
+### 1. Turn on the Calendar API
+https://console.cloud.google.com → project picker at the top → **qplan-5c4d7** → **APIs & Services → Library** → search **Google Calendar API** → **Enable**.
+
+### 2. Consent screen (Google Auth Platform)
+Left menu **Google Auth Platform** (older consoles: **APIs & Services → OAuth consent screen**).
+1. **Branding:** app name `QPlan`, user support email = yours, developer contact = yours. Application home page `https://q-plan.netlify.app`. Authorized domains: add `q-plan.netlify.app`. **Don't upload a logo**: a logo makes Google review the branding before the app can go live.
+2. **Audience:** user type **External**, then **Publish app** so it's **In production** (in "Testing", Google expires everyone's access after 7 days).
+3. **Data Access → Add or remove scopes** → filter for `calendar.app.created` → tick **…/auth/calendar.app.created** ("Make secondary Google calendars, and see, create, change, and delete events on them") → **Update** → **Save**. Note whether it's listed under **Your sensitive scopes** or **Your non-sensitive scopes**, and tell me: it decides whether users see the "unverified app" warning.
+
+### 3. A web client for the calendar connection
+**Google Auth Platform → Clients → Create client** → type **Web application** → name `QPlan Calendar`.
+- **Authorized JavaScript origins:** `https://q-plan.netlify.app`, `http://localhost:8888` (local testing).
+- **Authorized redirect URIs:** leave empty.
+- **Create.** Copy the **Client ID** and the **Client secret** right away (or download the JSON): newer consoles show the secret only once.
+
+### 4. A Firebase service account (lets the functions read Firestore)
+https://console.firebase.google.com → **qplan-5c4d7** → gear → **Project settings → Service accounts → Generate new private key** → a JSON file downloads. Keep it out of this folder and never commit it.
+
+### 5. Netlify environment variables
+Netlify → the site → **Site configuration → Environment variables → Add a variable** (scope: Functions; tick **Contains secret values** for the secret ones):
+
+| Key | Value |
+|---|---|
+| `GOOGLE_CLIENT_ID` | Client ID from step 3 |
+| `GOOGLE_CLIENT_SECRET` | Client secret from step 3 (secret) |
+| `FIREBASE_PROJECT_ID` | `qplan-5c4d7` |
+| `FIREBASE_CLIENT_EMAIL` | `client_email` from the JSON in step 4 |
+| `FIREBASE_PRIVATE_KEY` | `private_key` from the JSON, everything between the quotes, `\n`s included (secret) |
+
+Then **Deploys → Trigger deploy → Deploy site** so the functions pick them up.
+
+### 6. Firestore rules
+`firestore.rules` changed for this feature: paste it into **Firestore Database → Rules** again and **Publish**.
+
+### 7. Send me
+- The **Client ID** (it's public; it goes into `calendar.js`). Never the secret.
+- Whether `calendar.app.created` was sensitive or non-sensitive.
+
+### Later: Google verification (only if the scope is sensitive)
+Until Google verifies the app, people see an "unverified app" warning when connecting, and the number of users who can connect is capped. Verification needs: a privacy policy on the app's domain that covers Google data (board item B-009), the final domain verified in Google Search Console (D-004), and a short demo video of connecting.

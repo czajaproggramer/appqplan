@@ -1,19 +1,33 @@
 rules_version = '2';
 
 // QPlan sync: each signed-in user reads and writes only their own documents.
-//   users/{uid}             { settings: { timeFormat }, settingsUpdatedAt }
-//   users/{uid}/days/{date} { todos, events, updatedAt } or { deleted: true, updatedAt }
+//   users/{uid}             { settings: { timeFormat }, settingsUpdatedAt, calendar? }
+//   users/{uid}/days/{date} { todos, events, deleted, updatedAt, tz?, serverUpdatedAt? }
+// Google Calendar sync (netlify/lib/calendar.mjs, Admin SDK, which ignores these rules):
+//   users/{uid}.calendar    { status, email }: written only by the server; browsers can't change it
+//   calendarLinks/{uid}     Google tokens: no rule matches, so browsers can never read or write it
 // Paste this into Firebase console → Firestore Database → Rules, then Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid) && !('calendar' in request.resource.data);
+      allow update: if isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['calendar']);
 
       match /days/{date} {
-        allow read, delete: if request.auth != null && request.auth.uid == uid;
-        allow create, update: if request.auth != null && request.auth.uid == uid
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
           && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-          && request.resource.data.updatedAt is number;
+          && request.resource.data.updatedAt is number
+          // The calendar function trusts this to be the server's time. Left as it was is fine
+          // too (pages loaded before the field existed don't send it).
+          && (request.resource.data.get('serverUpdatedAt', null) == (resource == null ? null : resource.data.get('serverUpdatedAt', null))
+            || request.resource.data.serverUpdatedAt == request.time);
       }
     }
   }
