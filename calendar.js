@@ -9,7 +9,9 @@
    Uses currentUser, calendarHooks, askDialog, closeAccountMenu and accountButtonEl from
    sync.js, and dayKey and addDays from app.js. Setup: firebase/README.md.
    ========================================================================== */
-const GOOGLE_CLIENT_ID = null;   // firebase/README.md "Google Calendar sync" step 3; null keeps the "Soon" placeholder
+// The "QPlan Calendar" web client (public by design; the secret lives only in Netlify).
+// firebase/README.md "Google Calendar sync" step 3; null keeps the "Soon" placeholder.
+const GOOGLE_CLIENT_ID = '767476665721-q7c1d60jtv17a9oacg7i3o66hnrqt0d0.apps.googleusercontent.com';
 const GOOGLE_SCRIPT = 'https://accounts.google.com/gsi/client';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.app.created';
 const CALENDAR_SYNC_DELAY_MS = 4000;   // waits for a pause in editing
