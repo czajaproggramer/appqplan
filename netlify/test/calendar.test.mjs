@@ -160,7 +160,7 @@ check('today sent (3 events)', calendarEvents(today).length === 3, JSON.stringif
 const late = calendarEvents(today).find((e) => e.summary === 'Late');
 check('event ending at 24:00 ends next day 00:00', late?.end.dateTime === `${tomorrow}T00:00:00` && late.start.dateTime === `${today}T23:00:00`, JSON.stringify(late?.end));
 const gym = calendarEvents(today).find((e) => e.summary === 'Gym');
-check('times, zone, colour, no reminders', gym.start.dateTime === `${today}T09:00:00` && gym.end.dateTime === `${today}T09:15:00` && gym.start.timeZone === tz && gym.colorId === '2' && gym.reminders.useDefault === false);
+check('times, zone, yellow, no reminders', gym.start.dateTime === `${today}T09:00:00` && gym.end.dateTime === `${today}T09:15:00` && gym.start.timeZone === tz && gym.colorId === '5' && gym.reminders.useDefault === false);
 check('unnamed events are skipped', calendarEvents(tomorrow).length === 1);
 
 // Edits in QPlan: rename, remove, add
@@ -204,6 +204,7 @@ check('editing a past day after connecting sends it', calendarEvents(yesterday).
 await writeDay(tomorrow, [ev(1, 36, 40, 'NYC breakfast')], { tz: 'America/New_York' });
 await call(sync, {});
 check('each day keeps its own zone', calendarEvents(tomorrow)[0]?.start.timeZone === 'America/New_York');
+check('every event is yellow, whatever its QPlan tone', [...google.calendars.values()][0] && [...[...google.calendars.values()][0].events.values()].filter((e) => e.extendedProperties).every((e) => e.colorId === '5'));
 
 // Calendar deleted in Google → removed
 const linkBefore = (await db.doc(`calendarLinks/${uid}`).get()).data();

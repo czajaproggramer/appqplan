@@ -31,6 +31,7 @@ const calendarLabelEl = document.getElementById('calendar-label');
 const calendarNoteEl = document.getElementById('calendar-note');
 const calendarDisconnectEl = document.getElementById('calendar-disconnect');
 const calendarDialogEl = document.getElementById('calendar-dialog');
+const calendarConnectDialogEl = document.getElementById('calendar-connect-dialog');
 const deleteCalendarRowEl = document.getElementById('delete-calendar-row');
 const deleteCalendarEl = document.getElementById('delete-calendar');
 
@@ -103,9 +104,11 @@ function loadGoogleScript() {
   return googleScript;
 }
 
-// The pop-up must open right on the click, so Google's script is loaded when the account
-// menu opens. If it still isn't there, this click loads it and the next one connects.
-function connectCalendar() {
+// First a dialog saying edits made in Google are undone (not when reconnecting), then
+// Google's pop-up. The pop-up must open right on a click (Connect, or the dialog's
+// Continue), so Google's script is loaded when the account menu opens. If it still isn't
+// there, this click loads it and the next one connects.
+async function connectCalendar() {
   if (calendarConnectEl.getAttribute('aria-disabled') === 'true' || !currentUser) return;
   if (!window.google?.accounts?.oauth2) {
     calendarMessage = 'Loading Google… click again in a moment.';
@@ -117,6 +120,10 @@ function connectCalendar() {
     return;
   }
   calendarMessage = '';
+  if (calendarState?.status !== 'reconnect') {
+    closeAccountMenu();
+    if (await askDialog(calendarConnectDialogEl) !== 'connect') return;
+  }
   google.accounts.oauth2.initCodeClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: `openid email ${CALENDAR_SCOPE}`,
@@ -178,14 +185,14 @@ async function disconnectCalendar() {
 function renderCalendar() {
   const status = calendarState?.status;
   const linked = status === 'connected' || status === 'reconnect';
-  calendarConnectEl.hidden = calendarLoggedIn && status === 'connected';
+  calendarConnectEl.hidden = !calendarLoggedIn || status === 'connected';   // only with an account
   calendarConnectEl.setAttribute('aria-disabled', String(!calendarLoggedIn || calendarBusy));
   calendarLabelEl.textContent = calendarConnecting ? 'Connecting Google Calendar…'
     : status === 'reconnect' ? 'Reconnect Google Calendar'
       : 'Connect to Google Calendar';
   calendarDisconnectEl.hidden = !calendarLoggedIn || !linked;
   const note = calendarMessage
-    || (!calendarLoggedIn ? 'Log in first to connect.'
+    || (!calendarLoggedIn ? ''
       : status === 'connected' ? 'Google Calendar connected: your blocks show in the QPlan calendar.'
         : status === 'reconnect' ? 'Google stopped accepting QPlan\'s access.'
           : status === 'removed' ? 'The QPlan calendar was deleted in Google.' : '');

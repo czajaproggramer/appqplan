@@ -23,8 +23,7 @@ const QUARTERS = 96;
 const TIME_BUDGET_MS = 7000;   // Netlify stops a function at 10 s; the browser calls again for the rest
 const CHANGED_PAGE = 50;
 const MAX_HEAL_DAYS = 14;
-// QPlan tones → Google event colours: Tangerine, Sage, Flamingo, Peacock
-const TONE_COLORS = { peach: '6', sage: '2', rose: '4', sky: '7' };
+const EVENT_COLOR = '5';   // Google's "Banana": every QPlan block is yellow
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 // Replaceable in tests.
@@ -228,7 +227,7 @@ export function desiredEvents(key, day, tz) {
       summary: e.name.trim(),
       start: { dateTime: wallTime(key, e.start), timeZone: tz },
       end: { dateTime: wallTime(key, e.end), timeZone: tz },
-      colorId: TONE_COLORS[e.tone] || TONE_COLORS.peach,
+      colorId: EVENT_COLOR,
       reminders: { useDefault: false },
       extendedProperties: { private: { qplanDay: key, qplanId: String(e.id) } },
       status: 'confirmed',

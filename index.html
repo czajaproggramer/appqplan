@@ -42,8 +42,8 @@
             <p id="sync-status" class="sync-status sans-label"><span class="sync-dot" aria-hidden="true"></span><span id="sync-text"></span></p>
           </div>
           <button id="login" class="menu-item sans-body" type="button">Log in with Google</button>
-          <!-- Google Calendar (calendar.js). Without a client id it stays a "Soon" placeholder. -->
-          <button id="calendar-connect" class="menu-item sans-body" type="button" aria-disabled="true"><span id="calendar-label">Connect to Google Calendar</span> <span id="calendar-soon" class="menu-tag sans-time">Soon</span></button>
+          <!-- Google Calendar (calendar.js), only with an account. Without a client id it stays a "Soon" placeholder. -->
+          <button id="calendar-connect" class="menu-item sans-body" type="button" aria-disabled="true" data-logged-in><span id="calendar-label">Connect to Google Calendar</span> <span id="calendar-soon" class="menu-tag sans-time">Soon</span></button>
           <p id="calendar-note" class="menu-note sans-label" hidden></p>
           <button id="calendar-disconnect" class="menu-item sans-body" type="button" hidden>Disconnect Google Calendar…</button>
           <button id="logout" class="menu-item sans-body" type="button" data-logged-in>Log out</button>
@@ -155,6 +155,19 @@
       <div class="dialog-actions">
         <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
         <button class="btn btn--danger" value="delete">Delete account</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Connecting Google Calendar (calendar.js): explains that QPlan wins before Google's pop-up -->
+  <dialog id="calendar-connect-dialog" class="dialog" aria-labelledby="calendar-connect-title">
+    <form method="dialog">
+      <h2 id="calendar-connect-title" class="hand-title">Connect Google Calendar?</h2>
+      <p class="sans-body">QPlan adds a "QPlan" calendar to your Google Calendar and keeps your blocks there, from today onward.</p>
+      <p class="sans-body"><strong>Plan in QPlan.</strong> If you move, change or delete a QPlan block in Google Calendar, QPlan puts it back to match your plan at the next sync.</p>
+      <div class="dialog-actions">
+        <button class="btn btn--ghost" value="cancel">Cancel</button>
+        <button class="btn btn--quiet" value="connect" autofocus>Continue with Google</button>
       </div>
     </form>
   </dialog>
