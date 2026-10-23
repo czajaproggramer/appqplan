@@ -2,6 +2,12 @@
 [build]
   publish = "."
 
+# Netlify fails a deploy when an environment variable's value appears in the code. These two
+# are public by design (the project id is in sync.js's Firebase config, the client id in
+# calendar.js); the real secrets (GOOGLE_CLIENT_SECRET, FIREBASE_PRIVATE_KEY) stay scanned.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "FIREBASE_PROJECT_ID,GOOGLE_CLIENT_ID"
+
 # Google Calendar sync (netlify/functions/, shared code in netlify/lib/). Netlify installs
 # package.json's dependencies for these; the site itself still has no build step.
 [functions]
