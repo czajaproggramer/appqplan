@@ -743,13 +743,24 @@ kbd {
   .menu-item { height: 44px; }
 
   /* To do | Schedule: stays at the top while the page scrolls */
+  :root { --view-switch-height: 65px; }
   .view-switch {
     display: block;
     position: sticky;
     top: 0;
     z-index: 5;
+    height: var(--view-switch-height);
     padding: var(--space-4) var(--space-4) var(--space-2);
     background: var(--paper);
+  }
+  /* The schedule's title and time-format switch stay pinned under it too */
+  .schedule-sheet .sheet-head {
+    position: sticky;
+    top: var(--view-switch-height);
+    z-index: 4;
+    margin: 0 calc(-1 * var(--space-6));
+    padding: 0 var(--space-6) var(--space-2);
+    background: var(--paper-sheet);
   }
   .view-switch .segmented { display: flex; margin: 0; }
   .view-switch .segmented button { flex: 1; padding: var(--space-2); font-size: 15px; line-height: 22px; }

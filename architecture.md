@@ -172,7 +172,7 @@ Phones only (`PHONE_LAYOUT` = `(max-width: 720px)`, the same breakpoint as `styl
 - Components are ports of Ruled specs to plain CSS: paper sheet, button (`.btn`, `--quiet`, `--ghost`, `--icon`), hand-drawn checkbox, task row, underline input, segmented switch, schedule, events, picker.
 - Layout:
   - **≥ 721px:** the page fits the viewport, and the schedule scrolls inside its own sheet.
-  - **≤ 720px (phones):** one sheet at a time, chosen with the sticky To do | Schedule switch; the whole page scrolls. The header is the logo with the sync status and a menu button on the right, then the date. The header buttons and account items are in the menu. No keyboard hints, no `⌘P`, and the to-do sheet has no margin line or priority numbers.
+  - **≤ 720px (phones):** one sheet at a time, chosen with the sticky To do | Schedule switch; the whole page scrolls. The schedule's `.sheet-head` (title and time-format switch) is sticky too, just under the switch (`--view-switch-height`). The header is the logo with the sync status and a menu button on the right, then the date. The header buttons and account items are in the menu. No keyboard hints, no `⌘P`, and the to-do sheet has no margin line or priority numbers.
   - **721–860px:** the header stacks (logo, then date, then actions).
   - **`(hover: none)` (touch screens):** trash, extend and shorten buttons are always visible on events.
 - Light theme only. Ruled ships a dark theme, but **the owner rejected dark mode**. Don't enable it.
